@@ -12,6 +12,16 @@ function formatTime(value: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+function inspectDemo(buffer: ArrayBuffer) {
+  const text = new TextDecoder('latin1').decode(buffer);
+  const map = text.match(/maps[\\/]([A-Za-z0-9_+.-]+)\.bsp/i)?.[1]?.toLowerCase();
+  const gameDir = (
+    text.match(/\\\*gamedir\\([A-Za-z0-9_+.-]+)/i)?.[1]
+    ?? text.match(/\\gamedir\\([A-Za-z0-9_+.-]+)/i)?.[1]
+  )?.toLowerCase();
+  return { map, gameDir: gameDir === 'fortress' ? 'fortress' : gameDir ? 'qw' : undefined };
+}
+
 export function DemoPlayer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -54,6 +64,8 @@ export function DemoPlayer() {
               if (total > 0) setProgress(Math.min(100, Math.round((loaded / total) * 100)));
             }
           },
+          print(value: string) { console.info(`[FTEQW] ${value}`); },
+          printErr(value: string) { console.warn(`[FTEQW] ${value}`); },
         };
 
         const script = document.createElement('script');
@@ -111,8 +123,23 @@ export function DemoPlayer() {
 
   const loadLocalDemo = async (file: File | undefined) => {
     if (!file || !window.FTEC?.loadurl) return;
+    const buffer = await file.arrayBuffer();
+    const required = inspectDemo(buffer);
+    const preparedMap = manifest?.map.toLowerCase();
+    const preparedGameDir = manifest?.gamedir.toLowerCase();
+
+    if ((required.map && required.map !== preparedMap) || (required.gameDir && required.gameDir !== preparedGameDir)) {
+      const requirement = `${required.gameDir ?? '?'} / ${required.map ?? '?'}`;
+      const prepared = `${preparedGameDir ?? '?'} / ${preparedMap ?? '?'}`;
+      setPlaying(false);
+      setStatus('Нужны другие игровые ресурсы');
+      setError(`Демка требует ${requirement}, а сейчас подготовлено ${prepared}. Запустите npm run prepare-assets -- "<полный путь к ${file.name}>" и перезагрузите страницу.`);
+      return;
+    }
+
+    setError('');
     setStatus(`Открытие ${file.name}`);
-    window.FTEC.loadurl(file.name, '', await file.arrayBuffer());
+    window.FTEC.loadurl(file.name, '', buffer);
     setStatus('Локальная демка передана движку');
     setPlaying(true);
   };
@@ -182,7 +209,11 @@ export function DemoPlayer() {
 
         <div className="timeline">
           <span className="timecode">{formatTime(currentTime)}</span>
-          <input aria-label="Позиция демки" type="range" min="0" max={duration || Math.max(1, currentTime)} step="1" value={Math.min(currentTime, duration || currentTime)} disabled={!ready || !duration} onChange={(event) => command('demo_jump', Number(event.target.value))} />
+          {duration ? (
+            <input aria-label="Позиция демки" type="range" min="0" max={duration} step="1" value={Math.min(currentTime, duration)} disabled={!ready} onChange={(event) => command('demo_jump', Number(event.target.value))} />
+          ) : (
+            <span className="timeline-static" title="Полная длительность MVD пока не вычисляется"><i /></span>
+          )}
         </div>
 
         <div className="control-group">

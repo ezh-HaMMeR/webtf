@@ -25,15 +25,19 @@ npm run dev
 ```
 
 По умолчанию копируется учебная `speed-4.mvd` из руководства клиента: она достаточно длинная, чтобы проверить воспроизведение, паузу и переходы на 10 секунд.
-Она использует `dm4` и нужна только для проверки запуска движка.
+Она использует `dm2` и нужна только для проверки запуска движка. Скрипт копирует фактический BSP из `qw/maps`, потому что карты nQuake могут отсутствовать в `id1/pak0.pak`.
 
-Для реальной Team Fortress MVD:
+Для реальной Team Fortress MVD карта и game directory автоматически определяются по BSP precache и `*gamedir` внутри файла:
 
 ```powershell
-pwsh -NoProfile -File scripts/prepare-local-assets.ps1 `
-  -DemoPath "D:\demos\match.mvd.gz" `
-  -MapName "2fort5l" `
-  -GameDir fortress
+npm run prepare-assets -- "D:\demos\match.mvd"
+```
+
+При необходимости значения можно переопределить прямым вызовом:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\prepare-local-assets.ps1 `
+  -DemoPath "D:\demos\match.mvd.gz" -MapName "2fort5l" -GameDir fortress
 ```
 
 После повторной подготовки перезапускать dev-сервер не требуется — достаточно
@@ -41,7 +45,7 @@ pwsh -NoProfile -File scripts/prepare-local-assets.ps1 `
 
 ## Почему игровые файлы не находятся в репозитории
 
-`public/local/` и загруженные бинарные файлы FTE находятся в `.gitignore`.
+`public/local/`, локальный каталог `demos/` и загруженные бинарные файлы FTE находятся в `.gitignore`.
 Скрипт берёт карты, PAK, модели и звуки из локального клиента. Это не позволяет
 случайно опубликовать оригинальные ресурсы Quake/Team Fortress в публичном
 репозитории.
@@ -55,7 +59,7 @@ production-версии следует собирать FTEQW из закреп�
 - тестовая демка не является матчевой TF MVD;
 - временная шкала пока не знает полную длительность файла, поэтому активны
   кнопки относительного перехода, но не абсолютный drag-seek;
-- для новой TF-карты нужно повторно запустить подготовку с `-MapName`;
+- для демки на другой карте нужно повторно запустить подготовку игровых ресурсов;
 - TF-специфичные классы, captures и расширенный scoreboard ещё не вынесены в
   HTML-интерфейс;
 - онлайн QTV и WebSocket-to-TCP шлюз не входят в этот этап.

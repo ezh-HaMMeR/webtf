@@ -21,6 +21,8 @@ declare global {
       arguments?: string[];
       files?: Record<string, string>;
       setStatus?: (value: string) => void;
+      print?: (value: string) => void;
+      printErr?: (value: string) => void;
       getDemoTime?: () => number;
       getClientState?: () => {
         allocated_client_slots: number;

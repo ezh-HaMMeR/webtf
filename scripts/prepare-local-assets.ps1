@@ -1,6 +1,8 @@
 param(
-    [string]$ClientRoot = "C:\Games\ezquake-tf",
+    [Parameter(Position = 0)]
     [string]$DemoPath = "",
+    [Parameter(Position = 1)]
+    [string]$ClientRoot = "C:\Games\ezquake-tf",
     [string]$MapName = "",
     [ValidateSet("auto", "qw", "fortress")]
     [string]$GameDir = "auto"
@@ -30,7 +32,12 @@ $DemoBytes = [IO.File]::ReadAllBytes($DemoPath)
 $DemoText = [Text.Encoding]::ASCII.GetString($DemoBytes)
 
 if (-not $MapName) {
-    $MapMatch = [regex]::Match($DemoText, '\\map\\([A-Za-z0-9_+.-]+)')
+    # The first \map\ field in an MVD can belong to player userinfo (for
+    # example "touchtm"). The BSP precache is the authoritative world model.
+    $MapMatch = [regex]::Match($DemoText, 'maps[\\/]([A-Za-z0-9_+.-]+)\.bsp', 'IgnoreCase')
+    if (-not $MapMatch.Success) {
+        $MapMatch = [regex]::Match($DemoText, '\\map\\([A-Za-z0-9_+.-]+)', 'IgnoreCase')
+    }
     if ($MapMatch.Success) {
         $MapName = $MapMatch.Groups[1].Value
     }
@@ -40,7 +47,10 @@ if (-not $MapName) {
 }
 
 if ($GameDir -eq "auto") {
-    $GameMatch = [regex]::Match($DemoText, '\\gamedir\\([A-Za-z0-9_+.-]+)')
+    $GameMatch = [regex]::Match($DemoText, '\\\*gamedir\\([A-Za-z0-9_+.-]+)', 'IgnoreCase')
+    if (-not $GameMatch.Success) {
+        $GameMatch = [regex]::Match($DemoText, '\\gamedir\\([A-Za-z0-9_+.-]+)', 'IgnoreCase')
+    }
     $DetectedGameDir = if ($GameMatch.Success) { $GameMatch.Groups[1].Value.ToLowerInvariant() } else { "qw" }
     $GameDir = if ($DetectedGameDir -eq "fortress") { "fortress" } else { "qw" }
 }
@@ -112,10 +122,24 @@ if ($GameDir -eq "fortress") {
         Copy-RequiredFile (Join-Path $ClientRoot "fortress\$PakName") $PakTarget
         $Files["fortress/$PakName"] = "/local/game/fortress/$PakName"
     }
+}
 
-    $MapTarget = Join-Path $GameRoot "fortress\maps\$MapName.bsp"
-    Copy-RequiredFile (Join-Path $ClientRoot "fortress\maps\$MapName.bsp") $MapTarget
-    $Files["fortress/maps/$MapName.bsp"] = "/local/game/fortress/maps/$MapName.bsp"
+# Custom nQuake installations keep GPL maps outside id1/pak0.pak. Always
+# mount the actual BSP in the selected game directory instead of assuming the
+# base PAK contains it.
+$MapTarget = Join-Path $GameRoot "$GameDir\maps\$MapName.bsp"
+Copy-RequiredFile (Join-Path $ClientRoot "$GameDir\maps\$MapName.bsp") $MapTarget
+$Files["$GameDir/maps/$MapName.bsp"] = "/local/game/$GameDir/maps/$MapName.bsp"
+
+$LitCandidates = @(
+    (Join-Path $ClientRoot "$GameDir\lits\$MapName.lit"),
+    (Join-Path $ClientRoot "$GameDir\nquake\lits\$MapName.lit")
+)
+$LitSource = $LitCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+if ($LitSource) {
+    $LitTarget = Join-Path $GameRoot "$GameDir\lits\$MapName.lit"
+    Copy-RequiredFile $LitSource $LitTarget
+    $Files["$GameDir/lits/$MapName.lit"] = "/local/game/$GameDir/lits/$MapName.lit"
 }
 
 $DemoExtension = if ($DemoPath.ToLowerInvariant().EndsWith(".mvd.gz")) { ".mvd.gz" } else { ".mvd" }

@@ -40,3 +40,4 @@ next-env.d.ts
 # Locally prepared proprietary game data and downloaded engine binaries.
 /public/local/
 /public/vendor/fte/
+/demos/

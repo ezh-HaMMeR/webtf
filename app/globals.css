@@ -56,6 +56,8 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 80px); font-weight: 950; letter-spac
 .timeline { display: grid; grid-template-columns: 54px minmax(80px, 1fr); align-items: center; gap: 10px; }
 .timecode { color: #bdb7af; font-family: Consolas, monospace; font-size: 12px; }
 .timeline input, .volume input { accent-color: var(--accent); cursor: pointer; }
+.timeline-static { display: block; height: 4px; overflow: hidden; background: #4b4946; }
+.timeline-static > i { display: block; width: 20%; height: 100%; background: #77736e; }
 .volume { display: flex; align-items: center; gap: 7px; }
 .volume input { width: 78px; }
 
