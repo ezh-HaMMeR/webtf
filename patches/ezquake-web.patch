@@ -112,6 +112,46 @@ index fae5e5ac2..9042686cf 100644
  	Draw_String(x, y, output);
  }
  
+diff --git a/src/cl_cam.c b/src/cl_cam.c
+index aae98e366..bf5845e9b 100644
+--- a/src/cl_cam.c
++++ b/src/cl_cam.c
+@@ -145,7 +145,7 @@ void Cam_Unlock(void)
+ 		// its not setinfo extension, but adding new extension just for this is stupid IMO
+ 		QTV_Cmd_Printf(QTV_EZQUAKE_EXT_SETINFO, "ptrack");
+ 	}
+-	else
++	else if (!cls.mvdplayback)
+ 	{
+ 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
+ 		MSG_WriteString (&cls.netchan.message, "ptrack");
+@@ -179,7 +179,7 @@ void Cam_Lock(int playernum)
+ 		// its not setinfo extension, but adding new extension just for this is stupid IMO
+ 		QTV_Cmd_Printf(QTV_EZQUAKE_EXT_SETINFO, st);
+ 	}
+-	else {
++	else if (!cls.mvdplayback) {
+ 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
+ 		MSG_WriteString (&cls.netchan.message, st);
+ 	}
+@@ -459,7 +459,7 @@ void Cam_Track(usercmd_t *cmd)
+ 			VectorCopy(player->viewangles, cl.viewangles);
+ 		}
+ 		VectorCopy(player->origin, desired_position);
+-		if (memcmp(&desired_position, &self->origin, sizeof(desired_position)) != 0) {
++		if (!cls.mvdplayback && memcmp(&desired_position, &self->origin, sizeof(desired_position)) != 0) {
+ 			MSG_WriteByte (&cls.netchan.message, clc_tmove);
+ 			MSG_WriteCoord (&cls.netchan.message, desired_position[0]);
+ 			MSG_WriteCoord (&cls.netchan.message, desired_position[1]);
+@@ -474,7 +474,7 @@ void Cam_Track(usercmd_t *cmd)
+ 		// the player
+ 		VectorSubtract(desired_position, self->origin, vec);
+ 		cmd->forwardmove = cmd->sidemove = cmd->upmove = 0;
+-		if (VectorLength(vec) > 16) 
++		if (!cls.mvdplayback && VectorLength(vec) > 16)
+ 		{ 
+ 			// close enough?
+ 			MSG_WriteByte (&cls.netchan.message, clc_tmove);
 diff --git a/src/common.c b/src/common.c
 index 77cc8fb56..494171a30 100644
 --- a/src/common.c
@@ -255,6 +295,28 @@ index 219ec1a3e..b731205b4 100644
  	if (GL_Available(glTextureStorage2D)) {
  		GL_Procedure(glTextureStorage2D, GL_TextureNameFromReference(texture), levels, internalformat, width, height);
  	}
+diff --git a/src/glc_brushmodel.c b/src/glc_brushmodel.c
+index f5fde55c3..fe36c2fa5 100644
+--- a/src/glc_brushmodel.c
++++ b/src/glc_brushmodel.c
+@@ -661,7 +661,7 @@ static void GLC_DrawTextureChains_Immediate(entity_t* ent, model_t *model, qbool
+ 			}
+ 		}
+ 
+-		if (GL_Supported(R_SUPPORT_MULTITEXTURING)) {
++		if (gl_mtexable) {
+ 			GLC_MultiTexCoord2f(GL_TEXTURE0, 0, 0);
+ 
+ 			if (allocations.fbTextureUnit >= 0) {
+@@ -750,7 +750,7 @@ static void GLC_DrawTextureChains_Immediate(entity_t* ent, model_t *model, qbool
+ 						}
+ 
+ 						if (!draw_textureless) {
+-							if (GL_Supported(R_SUPPORT_MULTITEXTURING)) {
++							if (gl_mtexable) {
+ 								GLC_MultiTexCoord2f(GL_TEXTURE0, v[3], v[4]);
+ 
+ 								if (allocations.fbTextureUnit >= 0) {
 diff --git a/src/glc_draw.c b/src/glc_draw.c
 index cd6a97443..5d38429b8 100644
 --- a/src/glc_draw.c
@@ -569,10 +631,22 @@ index d3409738e..9b89f704b 100644
  size_t strlcpy(char *dst, const char *src, size_t siz)
  {
 diff --git a/src/snd_main.c b/src/snd_main.c
-index a9025b002..92f375317 100644
+index a9025b002..3b30ae831 100644
 --- a/src/snd_main.c
 +++ b/src/snd_main.c
-@@ -254,6 +254,12 @@ static qbool S_SDL_Init(void)
+@@ -94,7 +94,11 @@ cvar_t s_show = {"s_show", "0"};
+ cvar_t s_swapstereo = {"s_swapstereo", "0"};
+ cvar_t s_linearresample = {"s_linearresample", "0", CVAR_LATCH_SOUND };
+ cvar_t s_linearresample_stream = {"s_linearresample_stream", "0"};
++#ifdef __EMSCRIPTEN__
++cvar_t s_khz = {"s_khz", "48", CVAR_NONE, OnChange_s_khz};
++#else
+ cvar_t s_khz = {"s_khz", "11", CVAR_NONE, OnChange_s_khz}; // If > 11, default sounds are noticeably different.
++#endif
+ cvar_t s_desiredsamples = {"s_desiredsamples", "0", CVAR_AUTO, OnChange_s_desiredsamples };
+ cvar_t s_audiodevice = {"s_audiodevice", "0", CVAR_LATCH_SOUND };
+ cvar_t s_silent_racing = { "s_silent_racing", "0" };
+@@ -254,6 +258,12 @@ static qbool S_SDL_Init(void)
  
  		desired.samples = desired_samples;
  	}
@@ -789,10 +863,41 @@ index a4c131074..500f6c573 100644
  
  void Sys_MakeCodeWriteable (unsigned long startaddr, unsigned long length) {
 diff --git a/src/vid_sdl2.c b/src/vid_sdl2.c
-index d77ca3919..29db800a1 100644
+index d77ca3919..fb7583037 100644
 --- a/src/vid_sdl2.c
 +++ b/src/vid_sdl2.c
-@@ -699,7 +699,7 @@ byte Key_CharacterToQuakeCode(char ch)
+@@ -26,6 +26,10 @@
+ #include <SDL.h>
+ #include <SDL_syswm.h>
+ 
++#ifdef __EMSCRIPTEN__
++#include <emscripten/html5.h>
++#endif
++
+ #ifdef X11_GAMMA_WORKAROUND
+ #include <X11/extensions/xf86vmode.h>
+ #endif
+@@ -597,12 +601,19 @@ static void window_event(SDL_WindowEvent *event)
+ 
+ 		case SDL_WINDOWEVENT_RESIZED:
+ 			if (!(flags & SDL_WINDOW_FULLSCREEN)) {
++#ifdef __EMSCRIPTEN__
++				// CSS controls the visible player size.  Keep the render target at a
++				// predictable 16:9 resolution and let the browser scale the canvas.
++				glConfig.vidWidth = 1280;
++				glConfig.vidHeight = 720;
++#else
+ 				glConfig.vidWidth = event->data1;
+ 				glConfig.vidHeight = event->data2;
+ 				if (r_win_save_size.integer) {
+ 					Cvar_LatchedSetValue(&vid_win_width, event->data1);
+ 					Cvar_LatchedSetValue(&vid_win_height, event->data2);
+ 				}
++#endif
+ 				if (!r_conwidth.integer || !r_conheight.integer)
+ 					VID_UpdateConRes();
+ 			}
+@@ -699,7 +710,7 @@ byte Key_CharacterToQuakeCode(char ch)
  	return Key_ScancodeToQuakeCode(scancode);
  }
  
@@ -801,4 +906,34 @@ index d77ca3919..29db800a1 100644
  
  static void keyb_textinputevent(char* text)
  {
+@@ -1107,6 +1118,17 @@ static void VID_SetupResolution(void)
+ 	SDL_DisplayMode display_mode;
+ 	int display_nbr;
+ 
++#ifdef __EMSCRIPTEN__
++	// Native fullscreen settings describe the desktop monitor and must not leak
++	// into the embedded player.  The canvas is scaled responsively by CSS.
++	glConfig.vidWidth = 1280;
++	glConfig.vidHeight = 720;
++	glConfig.displayFrequency = 0;
++	Cvar_AutoSetInt(&vid_win_width, glConfig.vidWidth);
++	Cvar_AutoSetInt(&vid_win_height, glConfig.vidHeight);
++	return;
++#endif
++
+ 	if (r_fullscreen.integer) {
+ 		display_nbr = VID_DisplayNumber(true);
+ 		if (vid_usedesktopres.integer == 1) {
+@@ -1494,6 +1516,11 @@ static void VID_SDL_Init(void)
+ 			Sys_Error("Failed to create SDL window/context: %s\n", SDL_GetError());
+ 		}
+ 
++#ifdef __EMSCRIPTEN__
++		emscripten_set_canvas_element_size("#canvas", glConfig.vidWidth, glConfig.vidHeight);
++		SDL_SetWindowSize(sdl_window, glConfig.vidWidth, glConfig.vidHeight);
++#endif
++
+ 		// Alert user if our mode doesn't match what they requested
+ 		if (!(vid_options[i] & VID_MULTISAMPLED) && gl_multisamples.integer > 0) {
+ 			Cvar_AutoSetInt(&gl_multisamples, 0);
 

@@ -31,7 +31,7 @@ The page starts the bundled TF2003 MVD, accepts a local demo through the file pi
 tracked player, pauses playback, shows a scoreboard sourced from ezquake-tf state and enters
 fullscreen. All of these actions call the compiled client; the browser page does not parse MVD data.
 
-The first load transfers about 180 MiB of locally prepared game data. A production deployment must
+The first load transfers about 215 MiB of locally prepared game data. A production deployment must
 split/cache the data package and serve it with compression and long-lived cache headers.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the platform boundary and QTV plan.
@@ -41,6 +41,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the platform boundary and Q
 - Rendering currently uses ezQuake's classic renderer through Emscripten's legacy OpenGL-to-WebGL
   compatibility layer. This is suitable for proving complete TF2003 MVD playback, not the final
   production renderer.
+- The browser render target is fixed at 1280x720 and scaled responsively by CSS. Dynamic
+  device-pixel-ratio sizing belongs in the WebGL 2 production renderer.
 - Optional sounds absent from the source `C:\Games\ezquake-tf` installation remain absent in the
   browser build.
 - Live QTV transport, touch controls and production asset delivery are the next milestones.

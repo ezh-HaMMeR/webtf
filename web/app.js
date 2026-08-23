@@ -137,13 +137,18 @@ function runFrame() {
 
 async function boot() {
   try {
-    const { default: createWebTF } = await import("./build/ezquake.js?v=104");
+    const { default: createWebTF } = await import("./build/ezquake.js?v=118");
     engine = await createWebTF({
       canvas,
-      arguments: ["-basedir", "/webtf", "-nohome", "-noatlas", "-nomtex", "-game", "fortress"],
+      arguments: [
+        "-basedir", "/webtf", "-nohome", "-noatlas", "-nomtex", "-window", "-width", "1280", "-height", "720",
+        "-game", "fortress", "+vid_fullscreen", "0",
+        "+vid_win_width", "1280", "+vid_win_height", "720",
+        "+gl_program_aliasmodels", "0", "+gl_vbo_clientmemory", "1",
+      ],
       locateFile(path) {
         const url = new URL(`./build/${path}`, import.meta.url);
-        url.searchParams.set("v", "104");
+        url.searchParams.set("v", "118");
         return url.href;
       },
       print: log,

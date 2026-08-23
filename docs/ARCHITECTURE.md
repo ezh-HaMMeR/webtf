@@ -25,10 +25,22 @@ playback is stable, using a small WebSocket-to-QTV bridge next to the existing q
    authoritative player/team/frag/ping state through a narrow exported client bridge; it does not
    parse or duplicate the MVD protocol.
 
-The black-screen failure found during the prototype was not an MVD parser problem. The legacy
-renderer allocated RGB texture storage but uploaded the decoded Quake textures as RGBA. WebGL
-rejects that format mismatch, while desktop OpenGL accepts it more permissively. The Emscripten
-path now allocates matching RGBA storage, so the original world, models, HUD and TF assets render.
+The prepared filesystem includes the reference client's `qw/autoexec.cfg`, Fortress settings/HUD,
+TF models and sounds, and both TF/QW replacement texture directories. Windows-only case and parent
+path assumptions are normalized in the generated asset copy; the source client installation is
+never modified.
+
+The black/flat-world failure found during the prototype was not an MVD parser problem. It combined
+several desktop-OpenGL assumptions: an RGB/RGBA upload mismatch rejected by WebGL, fixed-function
+multitexture coordinates selected from hardware capability instead of the active renderer state,
+and alias-model VBOs that rely on APIs absent from WebGL 1. The compatibility build uses a
+single-texture multipass world path plus client-memory alias models, preserving the original
+textures, lightmaps and models without the unstable legacy VBO emulation path.
+
+The browser platform also fixes the render target at 1280x720 (CSS scales the complete canvas),
+opens SDL audio at 48 kHz, and suppresses spectator-camera network writes during file MVD playback.
+The latter prevents the unused reliable netchan buffer from filling while still updating the local
+camera exactly as before.
 
 ## Production renderer direction
 

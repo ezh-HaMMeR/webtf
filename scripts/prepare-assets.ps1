@@ -44,14 +44,25 @@ Copy-File 'id1\pak0.pak'
 Copy-File 'id1\PAK1.PAK'
 Copy-Tree 'ezquake'
 
-# Retain TF code/models/sounds, but only the map and colored-light file used by the reference demo.
-# Replacement texture packs and the other 77 BSPs are unnecessary for this playback milestone.
+# Retain TF code, models, sounds and replacement textures, but only the map and
+# colored-light file used by the reference demo.
 [IO.Directory]::CreateDirectory((Join-Path $assetRoot 'fortress')) | Out-Null
 Get-ChildItem -LiteralPath (Join-Path $clientRoot 'fortress') -File | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $assetRoot 'fortress') -Force
 }
-foreach ($directory in @('fortress\GFX', 'fortress\locs', 'fortress\progs', 'fortress\skins', 'fortress\sound')) {
+foreach ($directory in @('fortress\GFX', 'fortress\locs', 'fortress\progs', 'fortress\skins', 'fortress\sound', 'fortress\textures')) {
     Copy-Tree $directory
+}
+
+# Windows treats GFX and gfx as the same directory; Emscripten does not. The
+# renderer always requests lowercase gfx/, so normalize through a temporary
+# name to make the case-only rename effective on Windows.
+$gfxUpper = Join-Path $assetRoot 'fortress\GFX'
+$gfxLower = Join-Path $assetRoot 'fortress\gfx'
+if (Test-Path -LiteralPath $gfxUpper) {
+    $gfxTemporary = Join-Path $assetRoot 'fortress\gfx.webtf.tmp'
+    Move-Item -LiteralPath $gfxUpper -Destination $gfxTemporary -Force
+    Move-Item -LiteralPath $gfxTemporary -Destination $gfxLower -Force
 }
 
 # Emscripten's filesystem is case-sensitive, unlike the Windows client tree.
@@ -67,13 +78,36 @@ foreach ($file in @('fortress\maps\bastion.bsp', 'fortress\maps\bastion.ent', 'f
     Copy-File $file
 }
 
-# Client-side presentation assets. Large replacement texture packs and unrelated maps are excluded.
-foreach ($directory in @('qw\crosshairs', 'qw\env', 'qw\gfx', 'qw\img', 'qw\nquake', 'qw\skins', 'qw\sound')) {
+# Client-side presentation assets and replacement textures. Unrelated maps remain excluded.
+foreach ($directory in @('qw\crosshairs', 'qw\env', 'qw\gfx', 'qw\img', 'qw\nquake', 'qw\skins', 'qw\sound', 'qw\textures')) {
     Copy-Tree $directory
 }
 foreach ($file in @('qw\nquake.pk3', 'qw\models.pk3', 'qw\scoreboard_flags.pk3')) {
     Copy-File $file
 }
+foreach ($file in @('qw\autoexec.cfg', 'qw\config.cfg', 'qw\fragfile.dat', 'qw\chaticons.png')) {
+    Copy-File $file
+}
+
+# The native HUD config reaches shared images through ../qw/img. The Emscripten
+# virtual filesystem intentionally rejects parent-directory traversal in game
+# asset lookups. HUD group pictures are automatically prefixed with gfx/, so
+# stage the four referenced images under a lowercase browser-safe gfx path and
+# rewrite only those paths in the generated asset copy.
+foreach ($file in @('redpix.png', 'bluepix.png', 'spacer.png')) {
+    $source = Join-Path $assetRoot "qw\img\$file"
+    $destination = Join-Path $assetRoot "fortress\gfx\webtf\$file"
+    [IO.Directory]::CreateDirectory((Split-Path -Parent $destination)) | Out-Null
+    Copy-Item -LiteralPath $source -Destination $destination -Force
+}
+$weaponBaseDestination = Join-Path $assetRoot 'fortress\gfx\webtf\weap\base.png'
+[IO.Directory]::CreateDirectory((Split-Path -Parent $weaponBaseDestination)) | Out-Null
+Copy-Item -LiteralPath (Join-Path $assetRoot 'qw\img\weap\base.png') -Destination $weaponBaseDestination -Force
+
+$hudConfig = Join-Path $assetRoot 'fortress\hud.cfg'
+$hudText = [IO.File]::ReadAllText($hudConfig)
+$hudText = $hudText.Replace('../qw/img/', 'webtf/')
+[IO.File]::WriteAllText($hudConfig, $hudText, [Text.UTF8Encoding]::new($false))
 
 $demoDirectory = Join-Path $assetRoot 'demos'
 [IO.Directory]::CreateDirectory($demoDirectory) | Out-Null
