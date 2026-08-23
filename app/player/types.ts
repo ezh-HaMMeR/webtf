@@ -3,6 +3,7 @@ export type LocalManifest = {
   map: string;
   gamedir: string;
   durationSeconds?: number;
+  unsupportedReason?: string;
   files: Record<string, string>;
 };
 

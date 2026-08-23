@@ -30,6 +30,48 @@ if (-not (Test-Path -LiteralPath $DemoPath -PathType Leaf)) {
 
 $DemoBytes = [IO.File]::ReadAllBytes($DemoPath)
 $DemoText = [Text.Encoding]::ASCII.GetString($DemoBytes)
+$DemoDurationSeconds = $null
+$DemReadPackets = 0
+$MultiViewPackets = 0
+$UsesMvd1 = $false
+
+if (-not $DemoPath.ToLowerInvariant().EndsWith(".gz")) {
+    $DemoStream = [IO.MemoryStream]::new($DemoBytes, $false)
+    $DemoReader = [IO.BinaryReader]::new($DemoStream)
+    [uint64]$TotalMsec = 0
+    try {
+        while ($DemoStream.Position -lt $DemoStream.Length) {
+            $Msec = $DemoReader.ReadByte()
+            $Command = $DemoReader.ReadByte()
+            $CommandType = $Command -band 7
+            [uint32]$PacketSize = 0
+
+            if ($CommandType -eq 3) {
+                $DemoReader.ReadUInt32() | Out-Null
+            }
+            if ($CommandType -in @(1, 3, 4, 5, 6)) {
+                $PacketSize = $DemoReader.ReadUInt32()
+                $PacketData = $DemoReader.ReadBytes($PacketSize)
+                if ($PacketData.Length -ne $PacketSize) { throw "Unexpected end of MVD packet." }
+                if ($PacketData.Length -ge 5 -and $PacketData[0] -eq 11 -and [BitConverter]::ToUInt32($PacketData, 1) -eq [uint32]0x3144564D) {
+                    $UsesMvd1 = $true
+                }
+            } elseif ($CommandType -eq 2) {
+                if ($DemoReader.ReadBytes(8).Length -ne 8) { throw "Unexpected end of MVD sequence packet." }
+            } else {
+                throw "Unsupported MVD command type $CommandType."
+            }
+
+            if ($CommandType -eq 1) { $DemReadPackets++ }
+            if ($CommandType -in @(3, 4, 5, 6)) { $MultiViewPackets++ }
+            $TotalMsec += $Msec
+        }
+        $DemoDurationSeconds = [Math]::Round($TotalMsec / 1000, 3)
+    } finally {
+        $DemoReader.Dispose()
+        $DemoStream.Dispose()
+    }
+}
 
 if (-not $MapName) {
     # The first \map\ field in an MVD can belong to player userinfo (for
@@ -81,7 +123,13 @@ $EngineFiles = @(
 )
 
 foreach ($EngineFile in $EngineFiles) {
-    $Target = Join-Path $VendorRoot $EngineFile.Name
+    $TargetDirectory = if ($EngineFile.Name -in @("ftewebgl.js", "ftewebgl.wasm")) {
+        Join-Path $VendorRoot "004"
+    } else {
+        $VendorRoot
+    }
+    New-Item -ItemType Directory -Force -Path $TargetDirectory | Out-Null
+    $Target = Join-Path $TargetDirectory $EngineFile.Name
     $Download = $true
     if (Test-Path -LiteralPath $Target -PathType Leaf) {
         $CurrentHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Target).Hash
@@ -146,7 +194,8 @@ $DemoExtension = if ($DemoPath.ToLowerInvariant().EndsWith(".mvd.gz")) { ".mvd.g
 $PreparedDemoName = "match$DemoExtension"
 $PreparedDemoPath = Join-Path $DemoRoot $PreparedDemoName
 Copy-Item -LiteralPath $DemoPath -Destination $PreparedDemoPath -Force
-$Files["$GameDir/$PreparedDemoName"] = "/local/demos/$PreparedDemoName"
+$DemoHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $PreparedDemoPath).Hash.Substring(0, 16).ToLowerInvariant()
+$Files["$GameDir/$PreparedDemoName"] = "/local/demos/${PreparedDemoName}?v=$DemoHash"
 
 $Config = @"
 cfg_reset
@@ -181,7 +230,11 @@ $Manifest = [ordered]@{
     title = [IO.Path]::GetFileName($DemoPath)
     map = $MapName
     gamedir = $GameDir
+    durationSeconds = $DemoDurationSeconds
     files = $Files
+}
+if ($UsesMvd1 -or ($MultiViewPackets -gt 0 -and $DemReadPackets -eq 0)) {
+    $Manifest.unsupportedReason = "Эта демка использует настоящий multi-view MVD-поток (MVD1 / dem_all / dem_single). Текущая FTE WebGL-сборка читает его до EndOfDemo без синхронизации. Для воспроизведения нужен WebAssembly-build ezquake-tf либо патч FTE с поддержкой этого формата."
 }
 $ManifestJson = $Manifest | ConvertTo-Json -Depth 8
 [IO.File]::WriteAllText((Join-Path $LocalRoot "manifest.json"), $ManifestJson, [Text.UTF8Encoding]::new($false))

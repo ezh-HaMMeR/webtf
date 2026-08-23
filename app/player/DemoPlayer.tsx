@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createFtePlayer, trackByDelta } from './fte';
 import type { FtePlayer, LocalManifest } from './types';
 
-const ENGINE_SCRIPT = '/vendor/fte/ftewebgl.js';
+const ENGINE_SCRIPT = '/vendor/fte/004/ftewebgl.js';
 const ENGINE_MANIFEST = '/vendor/fte/default.fmf';
 
 function formatTime(value: number) {
@@ -19,7 +19,35 @@ function inspectDemo(buffer: ArrayBuffer) {
     text.match(/\\\*gamedir\\([A-Za-z0-9_+.-]+)/i)?.[1]
     ?? text.match(/\\gamedir\\([A-Za-z0-9_+.-]+)/i)?.[1]
   )?.toLowerCase();
-  return { map, gameDir: gameDir === 'fortress' ? 'fortress' : gameDir ? 'qw' : undefined };
+  const view = new DataView(buffer);
+  let offset = 0;
+  let demReadPackets = 0;
+  let multiViewPackets = 0;
+  let usesMvd1 = false;
+  try {
+    while (offset + 2 <= view.byteLength) {
+      offset += 1;
+      const commandType = view.getUint8(offset) & 7;
+      offset += 1;
+      if (commandType === 3) offset += 4;
+      if ([1, 3, 4, 5, 6].includes(commandType)) {
+        const packetSize = view.getUint32(offset, true);
+        offset += 4;
+        if (packetSize >= 5 && view.getUint8(offset) === 11 && view.getUint32(offset + 1, true) === 0x3144564d) usesMvd1 = true;
+        offset += packetSize;
+      } else if (commandType === 2) {
+        offset += 8;
+      } else {
+        break;
+      }
+      if (commandType === 1) demReadPackets += 1;
+      if ([3, 4, 5, 6].includes(commandType)) multiViewPackets += 1;
+    }
+  } catch {
+    // Metadata mismatch checks below are still useful for malformed files.
+  }
+  const unsupported = usesMvd1 || (multiViewPackets > 0 && demReadPackets === 0);
+  return { map, gameDir: gameDir === 'fortress' ? 'fortress' : gameDir ? 'qw' : undefined, unsupported };
 }
 
 export function DemoPlayer() {
@@ -49,6 +77,11 @@ export function DemoPlayer() {
         if (cancelled || !canvasRef.current) return;
 
         setManifest(localManifest);
+        if (localManifest.unsupportedReason) {
+          setStatus('Формат пока не поддерживается');
+          setError(localManifest.unsupportedReason);
+          return;
+        }
         setStatus('Загрузка движка и игровых ресурсов');
         window.Module = {
           canvas: canvasRef.current,
@@ -127,6 +160,13 @@ export function DemoPlayer() {
     const required = inspectDemo(buffer);
     const preparedMap = manifest?.map.toLowerCase();
     const preparedGameDir = manifest?.gamedir.toLowerCase();
+
+    if (required.unsupported) {
+      setPlaying(false);
+      setStatus('Формат пока не поддерживается');
+      setError('Это настоящий multi-view MVD/MVD1. Текущая FTE WebGL-сборка проматывает такой поток до EndOfDemo; нужен WebAssembly-build ezquake-tf или патч FTE.');
+      return;
+    }
 
     if ((required.map && required.map !== preparedMap) || (required.gameDir && required.gameDir !== preparedGameDir)) {
       const requirement = `${required.gameDir ?? '?'} / ${required.map ?? '?'}`;
