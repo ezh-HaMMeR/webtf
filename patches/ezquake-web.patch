@@ -1,0 +1,804 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f319f7178..1c9de0583 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -125,7 +125,13 @@ check_dependency(Jansson  "jansson"    "jansson"            "jansson::jansson"
+ check_dependency(MiniZip  "minizip"    "unofficial-minizip" "unofficial::minizip::minizip" REQUIRED)
+ check_dependency(PCRE2    "libpcre2-8" "PCRE2"              "pcre2::pcre2-8-static"        REQUIRED)
+ check_dependency(PNG      "libpng"     "PNG"                "PNG::PNG"                     REQUIRED)
+-check_dependency(SDL2     "sdl2"       "SDL2"               "SDL2::SDL2-static"            REQUIRED)
++if(EMSCRIPTEN)
++    add_library(web_sdl2 INTERFACE)
++    add_library(Dep::SDL2 ALIAS web_sdl2)
++    set(HAVE_SDL2 TRUE)
++else()
++    check_dependency(SDL2 "sdl2"       "SDL2"               "SDL2::SDL2-static"            REQUIRED)
++endif()
+ check_dependency(SndFile  "sndfile"    "SndFile"            "SndFile::sndfile"             REQUIRED)
+ check_dependency(Speex    "speex"      "Speex"              "SPEEX::SPEEX"                 OPTIONAL)
+ check_dependency(SpeexDSP "speexdsp"   "SpeexDSP"           "SPEEX::SPEEXDSP"              OPTIONAL)
+@@ -257,6 +263,9 @@ set(server
+ )
+ source_group(TREE ${SOURCE_DIR} PREFIX "Source Files/server" FILES ${server})
+ source_group(TREE ${SOURCE_DIR} PREFIX "Header Files/server" FILES ${server_headers})
++if(EMSCRIPTEN)
++    set(server "")
++endif()
+ 
+ if(RENDERER_MODERN_OPENGL)
+     set(MODERN_GLSL_DIR ${SOURCE_DIR}/glsl)
+@@ -760,7 +769,9 @@ if(BUILD_CFG_EDITOR_TESTS)
+ endif()
+ 
+ set(sys_headers ${SOURCE_DIR}/localtime.h)
+-if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
++if(EMSCRIPTEN)
++    set(sys ${SOURCE_DIR}/localtime_posix.c)
++elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+     set(sys ${SOURCE_DIR}/localtime_win.c)
+ else()
+     set(sys
+@@ -877,8 +888,45 @@ target_compile_definitions(ezquake PRIVATE
+         $<$<AND:$<BOOL:${HAVE_SPEEX}>,$<BOOL:${HAVE_SPEEXDSP}>>:WITH_SPEEX>
+ 
+         PCRE2_CODE_UNIT_WIDTH=8
++
++        $<$<BOOL:${EMSCRIPTEN}>:CLIENTONLY>
++        $<$<BOOL:${EMSCRIPTEN}>:C_ONLY>
++        $<$<BOOL:${EMSCRIPTEN}>:FTE_TARGET_WEB>
++        $<$<BOOL:${EMSCRIPTEN}>:WITHOUT_WINKEYHOOK>
++        $<$<BOOL:${EMSCRIPTEN}>:SHA1_Init=QW_SHA1_Init>
++        $<$<BOOL:${EMSCRIPTEN}>:SHA1_Update=QW_SHA1_Update>
++        $<$<BOOL:${EMSCRIPTEN}>:SHA1_Final=QW_SHA1_Final>
++        $<$<BOOL:${EMSCRIPTEN}>:SHA1=QW_SHA1>
+ )
+ 
++if(EMSCRIPTEN)
++    target_compile_options(ezquake PRIVATE -sUSE_SDL=2)
++    target_link_options(ezquake PRIVATE
++            -sUSE_SDL=2
++            -sMODULARIZE=1
++            -sEXPORT_ES6=1
++            -sEXPORT_NAME=createWebTF
++            -sEXPORTED_RUNTIME_METHODS=ccall,FS,UTF8ToString
++            -sALLOW_MEMORY_GROWTH=1
++            -sNO_EXIT_RUNTIME=1
++            -sSTACK_SIZE=4194304
++            -sINITIAL_MEMORY=536870912
++            -sMAXIMUM_MEMORY=2147483648
++            -sFORCE_FILESYSTEM=1
++            -sMIN_WEBGL_VERSION=1
++            -sMAX_WEBGL_VERSION=2
++            -sLEGACY_GL_EMULATION=1
++            -sGL_UNSAFE_OPTS=0
++    )
++    set_target_properties(ezquake PROPERTIES SUFFIX ".js")
++    if(DEFINED WEBTF_ASSET_DIR)
++        file(TO_CMAKE_PATH "${WEBTF_ASSET_DIR}" WEBTF_ASSET_DIR_NORMALIZED)
++        target_link_options(ezquake PRIVATE
++                "SHELL:--preload-file ${WEBTF_ASSET_DIR_NORMALIZED}@/webtf"
++        )
++    endif()
++endif()
++
+ target_link_libraries(ezquake PRIVATE
+         $<$<BOOL:${RENDERER_MODERN_OPENGL}>:shaders_modern>
+         $<$<BOOL:${RENDERER_CLASSIC_OPENGL}>:shaders_classic>
+@@ -920,6 +968,8 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+     string(TOLOWER "ezQuake" EXECUTABLE_NAME)
+ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+     string(TOLOWER "ezquake" EXECUTABLE_NAME)
++elseif(EMSCRIPTEN)
++    set(EXECUTABLE_NAME "ezquake")
+ else()
+     string(TOLOWER "ezquake-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}" EXECUTABLE_NAME)
+ endif()
+diff --git a/src/Ctrl_KeyCapture.c b/src/Ctrl_KeyCapture.c
+index fae5e5ac2..9042686cf 100644
+--- a/src/Ctrl_KeyCapture.c
++++ b/src/Ctrl_KeyCapture.c
+@@ -52,8 +52,12 @@ void CKeyCapture_Draw(const key_capture_control_t *control, int x, int y, int wi
+ 		}
+ 	}
+ 
+-	snprintf(output, sizeof(output), active ? "[%*.*s]" : " %-*.*s ",
+-		width, width, text, width, width, text);
++	if (active) {
++		snprintf(output, sizeof(output), "[%*.*s]", width, width, text);
++	}
++	else {
++		snprintf(output, sizeof(output), " %-*.*s ", width, width, text);
++	}
+ 	Draw_String(x, y, output);
+ }
+ 
+diff --git a/src/common.c b/src/common.c
+index 77cc8fb56..494171a30 100644
+--- a/src/common.c
++++ b/src/common.c
+@@ -90,8 +90,8 @@ void COM_StoreOriginalCmdline (int argc, char **argv)
+ 	char buf[4096]; // enough?
+ 	int i;
+ 
+-	buf[0] = 0;
+-	strlcat (buf, " ", sizeof (buf));
++	buf[0] = ' ';
++	buf[1] = 0;
+ 
+ 	for (i=0; i < argc; i++)
+ 		strlcat (buf, argv[i], sizeof (buf));
+diff --git a/src/gl_program.c b/src/gl_program.c
+index 6e8e415eb..64634ad75 100644
+--- a/src/gl_program.c
++++ b/src/gl_program.c
+@@ -639,6 +639,23 @@ static int GL_InsertDefinitions(
+ 		return 0;
+ 	}
+ 
++#ifdef __EMSCRIPTEN__
++	/*
++	 * LEGACY_GL_EMULATION supplies the GLSL ES preamble before the program
++	 * text. Desktop ezQuake shaders start with #version 120, which is no
++	 * longer the first directive and is rejected by WebGL. GLSL ES 1.00 is
++	 * the WebGL 1 default, so omit the desktop version line here.
++	 */
++	if (lengths[0] >= 13 && !strncmp(strings[0], "#version 120", 12)) {
++		strings[0] += 12;
++		lengths[0] -= 12;
++		while (lengths[0] > 0 && (*strings[0] == '\r' || *strings[0] == '\n')) {
++			++strings[0];
++			--lengths[0];
++		}
++	}
++#endif
++
+ #ifdef RENDERER_OPTION_MODERN_OPENGL
+ 	if (R_UseModernOpenGL()) {
+ 		extern unsigned char constants_glsl[], common_glsl[];
+@@ -1447,6 +1464,10 @@ void R_ProgramCompileAll(void)
+ 	int i;
+ 	int sub_program;
+ 
++	if (!GL_Supported(R_SUPPORT_RENDERING_SHADERS)) {
++		return;
++	}
++
+ 	for (i = 0; i < r_program_count; ++i) {
+ 		for (sub_program = 0; sub_program < MAX_SUBPROGRAMS; ++sub_program) {
+ 			gl_program_t* prog = R_SpecificSubProgram(i, sub_program);
+diff --git a/src/gl_sdl.c b/src/gl_sdl.c
+index 5ded17731..9654e11ec 100644
+--- a/src/gl_sdl.c
++++ b/src/gl_sdl.c
+@@ -58,6 +58,13 @@ SDL_GLContext GL_SDL_CreateBestContext(SDL_Window* window, const opengl_version_
+ {
+ 	SDL_GLContext context;
+ 	int attempt;
++#ifdef __EMSCRIPTEN__
++	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
++	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
++	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
++	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
++	return SDL_GL_CreateContext(window);
++#endif
+ #ifdef _WIN32
+ 	int accelerated = 0;
+ 
+diff --git a/src/gl_state.c b/src/gl_state.c
+index b0876d976..36459a0c2 100644
+--- a/src/gl_state.c
++++ b/src/gl_state.c
+@@ -912,7 +912,11 @@ void R_CustomColor(float r, float g, float b, float a)
+ {
+ #ifdef RENDERER_OPTION_CLASSIC_OPENGL
+ 	if (R_UseImmediateOpenGL()) {
+-		if (!opengl.rendering_state.colorValid || opengl.rendering_state.color[0] != r || opengl.rendering_state.color[1] != g || opengl.rendering_state.color[2] != b || opengl.rendering_state.color[3] != a) {
++		if (
++#ifdef __EMSCRIPTEN__
++			true ||
++#endif
++			!opengl.rendering_state.colorValid || opengl.rendering_state.color[0] != r || opengl.rendering_state.color[1] != g || opengl.rendering_state.color[2] != b || opengl.rendering_state.color[3] != a) {
+ 			glColor4f(
+ 				opengl.rendering_state.color[0] = r,
+ 				opengl.rendering_state.color[1] = g,
+diff --git a/src/gl_texture_functions.c b/src/gl_texture_functions.c
+index 219ec1a3e..b731205b4 100644
+--- a/src/gl_texture_functions.c
++++ b/src/gl_texture_functions.c
+@@ -31,6 +31,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ #include "r_trace.h"
+ #include "r_renderer.h"
+ 
++#ifdef __EMSCRIPTEN__
++/* WebGL has no glGetTexImage. The only direct caller is renderer debug capture. */
++void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void* pixels)
++{
++}
++#endif
++
+ // Samplers
+ static unsigned int nearest_sampler;
+ static unsigned int linear_sampler;
+@@ -256,6 +263,35 @@ void GL_TexStorage2D(
+ 
+ 	R_TextureSizeRoundUp(tempWidth, tempHeight, &width, &height);
+ 
++#ifdef __EMSCRIPTEN__
++	{
++		int level;
++		GLsizei level_width = width;
++		GLsizei level_height = height;
++		GLenum target = GL_TextureTargetFromReference(texture);
++		/* ezQuake uploads ordinary 2D textures through GL_UploadTexture as
++		 * RGBA even when the desktop storage request is RGB8. WebGL 1 requires
++		 * texSubImage2D's format to match the format used by texImage2D, so use
++		 * RGBA storage for the 8-bit browser path as well. */
++		GLenum format = (internalformat == GL_RGB16F ? GL_RGB : GL_RGBA);
++		GLenum type = (internalformat == GL_RGBA16F || internalformat == GL_RGB16F ? GL_FLOAT : GL_UNSIGNED_BYTE);
++
++		format = ((is_lightmap && GL_Supported(R_SUPPORT_BGRA_LIGHTMAPS)) ? GL_BGRA : format);
++		type = ((is_lightmap && GL_Supported(R_SUPPORT_INT8888R_LIGHTMAPS)) ? GL_UNSIGNED_INT_8_8_8_8_REV : type);
++		GL_BindTextureUnit(GL_TEXTURE0, texture);
++
++		/* WebGL 1 exposes some desktop entry points as stubs.  Allocate each
++		 * mip level with a sized-format-compatible glTexImage2D call instead. */
++		for (level = 0; level < levels; ++level) {
++			glTexImage2D(target, level, format, level_width, level_height, 0, format, type, NULL);
++			level_width = max(1, level_width / 2);
++			level_height = max(1, level_height / 2);
++		}
++		R_TextureSetDimensions(texture, width, height);
++		return;
++	}
++#endif
++
+ 	if (GL_Available(glTextureStorage2D)) {
+ 		GL_Procedure(glTextureStorage2D, GL_TextureNameFromReference(texture), levels, internalformat, width, height);
+ 	}
+diff --git a/src/glc_draw.c b/src/glc_draw.c
+index cd6a97443..5d38429b8 100644
+--- a/src/glc_draw.c
++++ b/src/glc_draw.c
+@@ -482,6 +482,39 @@ static void GLC_HudDrawImages_Immediate(texture_ref ref, int start, int end)
+ 
+ 	renderer.TextureSetFiltering(ref, nearest ? texture_minification_nearest : texture_minification_linear, nearest ? texture_magnification_nearest : texture_magnification_linear);
+ 	renderer.TextureUnitBind(0, ref);
++
++#ifdef __EMSCRIPTEN__
++	/*
++	 * Emscripten's legacy GL emulation records color calls as vertex data while
++	 * inside glBegin/glEnd.  Desktop GL treats color as persistent state, so the
++	 * normal batching below emits it only when an image changes color.  Draw one
++	 * quad at a time in the browser and set its color before glBegin, keeping the
++	 * generated interleaved vertex stream well-formed.
++	 */
++	for (i = start * 4; i <= 4 * end + 3; i += 4) {
++		glm_image_t* next = &imageData.images[i];
++		qbool next_nearest = (imageData.images[i / 4].flags & IMAGEPROG_FLAGS_NEAREST);
++
++		if (R_TextureReferenceIsValid(ref) && nearest != next_nearest) {
++			nearest = next_nearest;
++			renderer.TextureSetFiltering(ref, nearest ? texture_minification_nearest : texture_minification_linear, nearest ? texture_magnification_nearest : texture_magnification_linear);
++		}
++
++		R_CustomColor4ubv(next->colour);
++		GLC_Begin(GL_QUADS);
++		glTexCoord2f(next[0].tex[0], next[0].tex[1]);
++		GLC_Vertex2f(next[0].pos[0], next[0].pos[1]);
++		glTexCoord2f(next[2].tex[0], next[2].tex[1]);
++		GLC_Vertex2f(next[2].pos[0], next[2].pos[1]);
++		glTexCoord2f(next[3].tex[0], next[3].tex[1]);
++		GLC_Vertex2f(next[3].pos[0], next[3].pos[1]);
++		glTexCoord2f(next[1].tex[0], next[1].tex[1]);
++		GLC_Vertex2f(next[1].pos[0], next[1].pos[1]);
++		GLC_End();
++	}
++	return;
++#endif
++
+ 	R_CustomColor4ubv(imageData.images[start * 4].colour);
+ 	memcpy(current_color, imageData.images[start * 4].colour, sizeof(current_color));
+ 
+diff --git a/src/glsl/glc/glc_aliasmodel_shadow.fragment.glsl b/src/glsl/glc/glc_aliasmodel_shadow.fragment.glsl
+index 3d955e534..2e535bc29 100644
+--- a/src/glsl/glc/glc_aliasmodel_shadow.fragment.glsl
++++ b/src/glsl/glc/glc_aliasmodel_shadow.fragment.glsl
+@@ -4,7 +4,7 @@
+ 
+ void main()
+ {
+-	gl_FragColor = vec4(0, 0, 0, 0.5);
++	gl_FragColor = vec4(0.0, 0.0, 0.0, 0.5);
+ 
+ #ifdef DRAW_FOG
+ 	gl_FragColor = applyFog(gl_FragColor, gl_FragCoord.z / gl_FragCoord.w);
+diff --git a/src/glsl/glc/glc_aliasmodel_shadow.vertex.glsl b/src/glsl/glc/glc_aliasmodel_shadow.vertex.glsl
+index 7b80287e1..f1e31fb6f 100644
+--- a/src/glsl/glc/glc_aliasmodel_shadow.vertex.glsl
++++ b/src/glsl/glc/glc_aliasmodel_shadow.vertex.glsl
+@@ -14,14 +14,14 @@ void main()
+ 
+ #ifdef EZQ_ALIASMODEL_MUZZLEHACK
+ 	// #define AM_VERTEX_NOLERP 1 - no bittest in glsl 1.2
+-	lerpFrac = sign(lerpFrac) * max(lerpFrac, mod(flags, 2));
++	lerpFrac = sign(lerpFrac) * max(lerpFrac, mod(flags, 2.0));
+ #endif
+ 
+-	vec4 pos = gl_Vertex + lerpFrac * vec4(gl_MultiTexCoord1.xyz, 0);
++	vec4 pos = gl_Vertex + lerpFrac * vec4(gl_MultiTexCoord1.xyz, 0.0);
+ 
+ 	pos.x -= shadevector[0] * (pos[2] + lheight);
+ 	pos.y -= shadevector[1] * (pos[2] + lheight);
+-	pos.z = (1 - lheight);
++	pos.z = (1.0 - lheight);
+ 
+ 	gl_Position = gl_ModelViewProjectionMatrix * pos;
+ }
+diff --git a/src/glsl/glc/glc_aliasmodel_shell.vertex.glsl b/src/glsl/glc/glc_aliasmodel_shell.vertex.glsl
+index 06c6faffd..d4c6dbd47 100644
+--- a/src/glsl/glc/glc_aliasmodel_shell.vertex.glsl
++++ b/src/glsl/glc/glc_aliasmodel_shell.vertex.glsl
+@@ -15,10 +15,10 @@ void main()
+ 
+ #ifdef EZQ_ALIASMODEL_MUZZLEHACK
+ 	// #define AM_VERTEX_NOLERP 1 - no bittest in glsl 1.2
+-	lerpFrac = sign(lerpFrac) * max(lerpFrac, mod(flags, 2));
++	lerpFrac = sign(lerpFrac) * max(lerpFrac, mod(flags, 2.0));
+ #endif
+ 
+-	gl_Position = gl_ModelViewProjectionMatrix * ((gl_Vertex + lerpFrac * vec4(gl_MultiTexCoord1.xyz, 0)) + vec4(gl_Normal * 0.5, 0));
+-	fsTextureCoord = vec2(gl_MultiTexCoord0.s * 2 + scroll.x, gl_MultiTexCoord0.t * 2 + scroll.y);
+-	fsAltTextureCoord = vec2(gl_MultiTexCoord0.s * 2 + scroll.z, gl_MultiTexCoord0.t * 2 + scroll.a);
++	gl_Position = gl_ModelViewProjectionMatrix * ((gl_Vertex + lerpFrac * vec4(gl_MultiTexCoord1.xyz, 0.0)) + vec4(gl_Normal * 0.5, 0.0));
++	fsTextureCoord = vec2(gl_MultiTexCoord0.s * 2.0 + scroll.x, gl_MultiTexCoord0.t * 2.0 + scroll.y);
++	fsAltTextureCoord = vec2(gl_MultiTexCoord0.s * 2.0 + scroll.z, gl_MultiTexCoord0.t * 2.0 + scroll.a);
+ }
+diff --git a/src/glsl/glc/glc_aliasmodel_std.fragment.glsl b/src/glsl/glc/glc_aliasmodel_std.fragment.glsl
+index bb0ffd3fa..fa5aab1ba 100644
+--- a/src/glsl/glc/glc_aliasmodel_std.fragment.glsl
++++ b/src/glsl/glc/glc_aliasmodel_std.fragment.glsl
+@@ -41,12 +41,12 @@ void main()
+ 		vec4 causticCoord = vec4(
+ 			// Using multipler of 3 here - not in other caustics logic but range
+ 			//   isn't enough otherwise, effect too subtle
+-			(fsTextureCoord.s + sin(0.465 * (time + fsTextureCoord.t))) * 3 * -0.1234375,
+-			(fsTextureCoord.t + sin(0.465 * (time + fsTextureCoord.s))) * 3 * -0.1234375,
+-			0,
+-			1
++			(fsTextureCoord.s + sin(0.465 * (time + fsTextureCoord.t))) * 3.0 * -0.1234375,
++			(fsTextureCoord.t + sin(0.465 * (time + fsTextureCoord.s))) * 3.0 * -0.1234375,
++			0.0,
++			1.0
+ 		);
+-		vec4 caustic = texture2D(causticsSampler, (gl_TextureMatrix[1] * causticCoord).st);
++		vec4 caustic = texture2D(causticsSampler, causticCoord.st);
+ 
+ 		// FIXME: Do proper GL_DECAL etc
+ 		gl_FragColor = vec4(caustic.rgb * gl_FragColor.rgb * 1.8, gl_FragColor.a);
+diff --git a/src/glsl/glc/glc_aliasmodel_std.vertex.glsl b/src/glsl/glc/glc_aliasmodel_std.vertex.glsl
+index 02fc225d6..87e13ad2d 100644
+--- a/src/glsl/glc/glc_aliasmodel_std.vertex.glsl
++++ b/src/glsl/glc/glc_aliasmodel_std.vertex.glsl
+@@ -37,15 +37,15 @@ void main()
+ {
+ 	float lerpFrac = lerpFraction;
+ #ifdef EZQ_ALIASMODEL_MUZZLEHACK
+-	lerpFrac = sign(lerpFrac) * max(lerpFrac, mod(flags, 2));
++	lerpFrac = sign(lerpFrac) * max(lerpFrac, mod(flags, 2.0));
+ #endif
+ 
+ #ifdef BACKFACE_PASS
+-	gl_Position = gl_ModelViewProjectionMatrix * (gl_Vertex + lerpFrac * vec4(gl_MultiTexCoord1.xyz, 0) + vec4(outlineScale * gl_Normal, 0));
++	gl_Position = gl_ModelViewProjectionMatrix * (gl_Vertex + lerpFrac * vec4(gl_MultiTexCoord1.xyz, 0.0) + vec4(outlineScale * gl_Normal, 0.0));
+ 	// gl_Position += gl_ModelViewProjectionMatrix * 
+ 	fsBaseColor = gl_Color;
+ #else
+-		gl_Position = gl_ModelViewProjectionMatrix * (gl_Vertex + lerpFrac * vec4(gl_MultiTexCoord1.xyz, 0));
++		gl_Position = gl_ModelViewProjectionMatrix * (gl_Vertex + lerpFrac * vec4(gl_MultiTexCoord1.xyz, 0.0));
+ 	#if defined(TEXTURING_ENABLED) || defined(DRAW_CAUSTIC_TEXTURES)
+ 		fsTextureCoord = gl_MultiTexCoord0.st;
+ 	#endif // TEXTURING
+@@ -55,7 +55,7 @@ void main()
+ 	#else
+ 		// Lighting: this is rough approximation
+ 		//   Credit to mh @ http://forums.insideqc.com/viewtopic.php?f=3&t=2983
+-		float l = (1 - step(1000, shadelight)) * min((dot(gl_Normal, angleVector) + 1) * shadelight + ambientlight, 1);
++		float l = (1.0 - step(1000.0, shadelight)) * min((dot(gl_Normal, angleVector) + 1.0) * shadelight + ambientlight, 1.0);
+ 
+ 		fsBaseColor = vec4(gl_Color.rgb * l, gl_Color.a);
+ 	#endif // FULLBRIGHT_MODELS
+diff --git a/src/glsl/glc/glc_caustics.fragment.glsl b/src/glsl/glc/glc_caustics.fragment.glsl
+index 5e022ad40..78a3e9c71 100644
+--- a/src/glsl/glc/glc_caustics.fragment.glsl
++++ b/src/glsl/glc/glc_caustics.fragment.glsl
+@@ -11,8 +11,8 @@ void main()
+ {
+ 	vec2 tex;
+ 
+-	tex.s = (TextureCoord.s + 8 * sin((TextureCoord.t + time) * 0.465)) * 0.0234375;
+-	tex.t = (TextureCoord.t + 8 * sin((TextureCoord.s + time) * 0.465)) * 0.0234375;
++	tex.s = (TextureCoord.s + 8.0 * sin((TextureCoord.t + time) * 0.465)) * 0.0234375;
++	tex.t = (TextureCoord.t + 8.0 * sin((TextureCoord.s + time) * 0.465)) * 0.0234375;
+ 
+ 	gl_FragColor = texture2D(texSampler, tex);
+ }
+diff --git a/src/glsl/glc/glc_sky.fragment.glsl b/src/glsl/glc/glc_sky.fragment.glsl
+index d40180a7e..593b8603c 100644
+--- a/src/glsl/glc/glc_sky.fragment.glsl
++++ b/src/glsl/glc/glc_sky.fragment.glsl
+@@ -25,7 +25,7 @@ void main()
+ #else
+ 	const float len = 3.09375;
+ 	// Flatten it out
+-	vec3 dir = normalize(vec3(Direction.x, Direction.y, 3 * Direction.z));
++	vec3 dir = normalize(vec3(Direction.x, Direction.y, 3.0 * Direction.z));
+ 
+ 	vec4 skyColor = texture2D(skyDomeTex, vec2(skySpeedscale + dir.x * len, skySpeedscale + dir.y * len));
+ 	vec4 cloudColor = texture2D(skyDomeCloudTex, vec2(skySpeedscale2 + dir.x * len, skySpeedscale2 + dir.y * len));
+diff --git a/src/glsl/glc/glc_world_drawflat.fragment.glsl b/src/glsl/glc/glc_world_drawflat.fragment.glsl
+index 1661b9ced..f701b9b91 100644
+--- a/src/glsl/glc/glc_world_drawflat.fragment.glsl
++++ b/src/glsl/glc/glc_world_drawflat.fragment.glsl
+@@ -20,9 +20,9 @@ void main()
+ {
+ 	// lightmap
+ #ifdef EZ_USE_TEXTURE_ARRAYS
+-	vec4 lightmap = vec4(1, 1, 1, 1 + lightmapScale) - lightmapScale * texture2DArray(texSampler, TextureCoord);
++	vec4 lightmap = vec4(1.0, 1.0, 1.0, 1.0 + lightmapScale) - lightmapScale * texture2DArray(texSampler, TextureCoord);
+ #else
+-	vec4 lightmap = vec4(1, 1, 1, 1 + lightmapScale) - lightmapScale * texture2D(texSampler, TextureCoord);
++	vec4 lightmap = vec4(1.0, 1.0, 1.0, 1.0 + lightmapScale) - lightmapScale * texture2D(texSampler, TextureCoord);
+ #endif
+ 
+ 	gl_FragColor = color * lightmap;
+diff --git a/src/glsl/glc/glc_world_drawflat.vertex.glsl b/src/glsl/glc/glc_world_drawflat.vertex.glsl
+index 894cff5cd..21ab26f8b 100644
+--- a/src/glsl/glc/glc_world_drawflat.vertex.glsl
++++ b/src/glsl/glc/glc_world_drawflat.vertex.glsl
+@@ -29,19 +29,19 @@ void main()
+ 	TextureCoord = gl_MultiTexCoord0.st;
+ #endif
+ 
+-	lightmapScale = step(64, mod(style, 256));
++	lightmapScale = step(64.0, mod(style, 256.0));
+ 
+-	color = vec4(0, 0, 0, 1);
+-	color += mod(style, 2) * skycolor;
+-	color += mod(floor(style / 2), 2) * watercolor;
+-	color += mod(floor(style / 4), 2) * slimecolor;
+-	color += mod(floor(style / 8), 2) * lavacolor;
+-	color += mod(floor(style / 16), 2) * telecolor;
+-	color += mod(floor(style / 32), 2) * skycolor;
+-	color += mod(floor(style / 64), 2) * floorcolor;
+-	color += mod(floor(style / 128), 2) * wallcolor;
+-	color.a = 1;
++	color = vec4(0.0, 0.0, 0.0, 1.0);
++	color += mod(style, 2.0) * skycolor;
++	color += mod(floor(style / 2.0), 2.0) * watercolor;
++	color += mod(floor(style / 4.0), 2.0) * slimecolor;
++	color += mod(floor(style / 8.0), 2.0) * lavacolor;
++	color += mod(floor(style / 16.0), 2.0) * telecolor;
++	color += mod(floor(style / 32.0), 2.0) * skycolor;
++	color += mod(floor(style / 64.0), 2.0) * floorcolor;
++	color += mod(floor(style / 128.0), 2.0) * wallcolor;
++	color.a = 1.0;
+ 
+ 	// don't apply z-fog to the sky
+-	fogScale = 1 - mod(style, 2);
++	fogScale = 1.0 - mod(style, 2.0);
+ }
+diff --git a/src/glsl/glc/glc_world_textured.fragment.glsl b/src/glsl/glc/glc_world_textured.fragment.glsl
+index 3ab08119d..b84d3efb0 100644
+--- a/src/glsl/glc/glc_world_textured.fragment.glsl
++++ b/src/glsl/glc/glc_world_textured.fragment.glsl
+@@ -121,10 +121,10 @@ void main()
+ #ifdef DRAW_LIGHTMAPS
+ #ifdef EZ_USE_TEXTURE_ARRAYS
+ 	// Apply lightmap from texture array
+-	gl_FragColor *= (vec4(1, 1, 1, 2) - texture2DArray(lightmapSampler, LightmapCoord));
++	gl_FragColor *= (vec4(1.0, 1.0, 1.0, 2.0) - texture2DArray(lightmapSampler, LightmapCoord));
+ #else
+ 	// Apply lightmap from simple atlas
+-	gl_FragColor *= (vec4(1, 1, 1, 2) - texture2D(lightmapSampler, LightmapCoord));
++	gl_FragColor *= (vec4(1.0, 1.0, 1.0, 2.0) - texture2D(lightmapSampler, LightmapCoord));
+ #endif
+ #endif
+ 
+diff --git a/src/glsl/glc/glc_world_textured.vertex.glsl b/src/glsl/glc/glc_world_textured.vertex.glsl
+index f3d9d67cf..f6db72a45 100644
+--- a/src/glsl/glc/glc_world_textured.vertex.glsl
++++ b/src/glsl/glc/glc_world_textured.vertex.glsl
+@@ -51,16 +51,16 @@ void main()
+ #endif
+ 
+ #ifdef DRAW_EXTRA_TEXTURES
+-	lumaScale = lumaMultiplier * mod(floor(style / 256), 2);
+-	fbScale = fbMultiplier * mod(floor(style / 1024), 2);
++	lumaScale = lumaMultiplier * mod(floor(style / 256.0), 2.0);
++	fbScale = fbMultiplier * mod(floor(style / 1024.0), 2.0);
+ #endif
+ #ifdef DRAW_CAUSTICS
+-	causticsScale = mod(floor(style / 512), 2);
++	causticsScale = mod(floor(style / 512.0), 2.0);
+ #endif
+ #ifdef DRAW_DETAIL
+ 	DetailCoord = detailCoordInput;
+ #endif
+ 
+-	mix_floor = mod(floor(style / 64), 2);
+-	mix_wall = mod(floor(style / 128), 2);
++	mix_floor = mod(floor(style / 64.0), 2.0);
++	mix_wall = mod(floor(style / 128.0), 2.0);
+ }
+diff --git a/src/hud_teaminfo.c b/src/hud_teaminfo.c
+index 87192bd7f..ffb3221ca 100644
+--- a/src/hud_teaminfo.c
++++ b/src/hud_teaminfo.c
+@@ -77,6 +77,7 @@ typedef struct teaminfo_block_vars_s {
+ 	cvar_t *scale;
+ } teaminfo_block_vars_t;
+ 
++struct hud_teaminfo_vars_s;
+ static int SCR_HudDrawTeamInfoPlayer(ti_player_t *ti_cl, float x, int y, int maxname, int maxloc, const teaminfo_grenade_layout_t* grenades, const struct hud_teaminfo_vars_s* render_vars, qbool width_only, float scale, const char* layout, int weapon_style, float weapon_icon_scale, int show_ammo, int show_countdown, int armor_style, int powerup_style, int flag_style, int low_health, qbool proportional);
+ 
+ typedef struct hud_teaminfo_vars_s {
+diff --git a/src/movie.h b/src/movie.h
+index 710fc01c5..383f8546d 100644
+--- a/src/movie.h
++++ b/src/movie.h
+@@ -30,7 +30,7 @@ qbool Movie_IsCapturingAVI(void);
+ void Movie_Stop(qbool restarting);
+ double Movie_Frametime(void);
+ double Movie_InputFrametime(void);
+-qbool Movie_TransferSound(void* data, int snd_linear_count);
++void Movie_TransferSound(void* data, int snd_linear_count);
+ void Movie_MixFrameSound(void (*mixFunction)(void));
+ 
+ #endif
+diff --git a/src/q_shared.c b/src/q_shared.c
+index d3409738e..9b89f704b 100644
+--- a/src/q_shared.c
++++ b/src/q_shared.c
+@@ -236,7 +236,7 @@ int qvsnprintf(char *buffer, size_t count, const char *format, va_list argptr)
+ }
+ #endif
+ 
+-#if defined(__linux__) || defined(_WIN32)
++#if defined(__linux__) || defined(_WIN32) || defined(__EMSCRIPTEN__)
+ 
+ size_t strlcpy(char *dst, const char *src, size_t siz)
+ {
+diff --git a/src/snd_main.c b/src/snd_main.c
+index a9025b002..92f375317 100644
+--- a/src/snd_main.c
++++ b/src/snd_main.c
+@@ -254,6 +254,12 @@ static qbool S_SDL_Init(void)
+ 
+ 		desired.samples = desired_samples;
+ 	}
++#ifdef __EMSCRIPTEN__
++	/* WebAudio ScriptProcessorNode rejects buffers smaller than 256 samples. */
++	if (desired.samples < 256) {
++		desired.samples = 256;
++	}
++#endif
+ 	desired.callback = S_SDL_callback;
+ 
+ 	/* Make audiodevice list start from index 1 so that 0 can be system default */
+diff --git a/src/snd_voip.c b/src/snd_voip.c
+index 775094376..8b111c2ac 100644
+--- a/src/snd_voip.c
++++ b/src/snd_voip.c
+@@ -147,6 +147,9 @@ static int S_CaptureDriverInit (int sampleRate)
+ 	memset (&desired, 0, sizeof (desired));
+ 	desired.freq = sampleRate;
+ 	desired.samples = 64;
++#ifdef __EMSCRIPTEN__
++	desired.samples = 256;
++#endif
+ 	desired.format = AUDIO_S16LSB;
+ 	desired.channels = 1;
+ 
+diff --git a/src/sys_posix.c b/src/sys_posix.c
+index a4c131074..500f6c573 100644
+--- a/src/sys_posix.c
++++ b/src/sys_posix.c
+@@ -45,7 +45,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ #include <SDL.h>
+ #include <dlfcn.h>
+ 
++#ifdef __EMSCRIPTEN__
++#include <emscripten.h>
++#endif
++
+ #include "quakedef.h"
++#include "menu.h"
+ #include "server.h"
+ #include <pcre2.h>
+ 
+@@ -69,6 +74,18 @@ cvar_t sys_fontsdir     = {"sys_fontsdir", "/usr/local/share/fonts/"};
+ 
+ void Sys_Printf (char *fmt, ...)
+ {
++#ifdef __EMSCRIPTEN__
++	va_list argptr;
++
++	if (sys_nostdout.value)
++		return;
++
++	va_start(argptr, fmt);
++	vprintf(fmt, argptr);
++	va_end(argptr);
++	fflush(stdout);
++	return;
++#endif
+ #ifdef DEBUG
+ 	va_list argptr;
+ 	char text[2048];
+@@ -315,9 +332,124 @@ double Sys_DoubleTime(void)
+ }
+ #endif
+ 
++static double webtf_oldtime;
++
++#ifdef __EMSCRIPTEN__
++EMSCRIPTEN_KEEPALIVE void WebTF_Frame(void)
++{
++	double newtime = Sys_DoubleTime();
++	double time = newtime - webtf_oldtime;
++	webtf_oldtime = newtime;
++	Host_Frame(time);
++}
++
++EMSCRIPTEN_KEEPALIVE void WebTF_ExecuteCommand(const char *command)
++{
++	if (command && *command) {
++		/* Browser UI callbacks already run on the client main thread. */
++		Cmd_ExecuteString((char *)command);
++	}
++}
++
++EMSCRIPTEN_KEEPALIVE int WebTF_DemoPlayback(void)
++{
++	return cls.demoplayback;
++}
++
++EMSCRIPTEN_KEEPALIVE double WebTF_DemoTime(void)
++{
++	return cls.demotime;
++}
++
++EMSCRIPTEN_KEEPALIVE int WebTF_TrackNum(void)
++{
++	return Cam_TrackNum();
++}
++
++EMSCRIPTEN_KEEPALIVE const char *WebTF_TrackedName(void)
++{
++	static char name[MAX_SCOREBOARDNAME];
++	int track = Cam_TrackNum();
++
++	if (track < 0 || track >= MAX_CLIENTS)
++		return "";
++
++	strlcpy(name, cl.players[track].name, sizeof(name));
++	return Q_normalizetext(name);
++}
++
++static const char *WebTF_NormalizedText(const char *source)
++{
++	static char text[MAX_INFO_STRING];
++
++	strlcpy(text, source, sizeof(text));
++	return Q_normalizetext(text);
++}
++
++EMSCRIPTEN_KEEPALIVE int WebTF_MaxClients(void)
++{
++	return MAX_CLIENTS;
++}
++
++EMSCRIPTEN_KEEPALIVE int WebTF_PlayerActive(int slot)
++{
++	return slot >= 0 && slot < MAX_CLIENTS && cl.players[slot].name[0];
++}
++
++EMSCRIPTEN_KEEPALIVE int WebTF_PlayerSpectator(int slot)
++{
++	return slot >= 0 && slot < MAX_CLIENTS && cl.players[slot].spectator;
++}
++
++EMSCRIPTEN_KEEPALIVE const char *WebTF_PlayerName(int slot)
++{
++	return WebTF_PlayerActive(slot) ? WebTF_NormalizedText(cl.players[slot].name) : "";
++}
++
++EMSCRIPTEN_KEEPALIVE const char *WebTF_PlayerTeam(int slot)
++{
++	return WebTF_PlayerActive(slot) ? WebTF_NormalizedText(cl.players[slot].team) : "";
++}
++
++EMSCRIPTEN_KEEPALIVE int WebTF_PlayerFrags(int slot)
++{
++	return WebTF_PlayerActive(slot) ? cl.players[slot].frags : 0;
++}
++
++EMSCRIPTEN_KEEPALIVE int WebTF_PlayerPing(int slot)
++{
++	return WebTF_PlayerActive(slot) ? cl.players[slot].ping : 0;
++}
++
++EMSCRIPTEN_KEEPALIVE void WebTF_TrackRelative(int direction)
++{
++	int current = Cam_TrackNum();
++	int step = direction < 0 ? -1 : 1;
++	int i;
++
++	for (i = 1; i <= MAX_CLIENTS; ++i) {
++		int slot = (current + step * i + MAX_CLIENTS * 2) % MAX_CLIENTS;
++		if (cl.players[slot].name[0] && !cl.players[slot].spectator) {
++			char command[64];
++			snprintf(command, sizeof(command), "track %d", cl.players[slot].userid);
++			Cmd_ExecuteString(command);
++			return;
++		}
++	}
++}
++
++EMSCRIPTEN_KEEPALIVE void WebTF_CloseMenus(void)
++{
++	M_LeaveMenus();
++}
++#endif
++
+ int main(int argc, char **argv)
+ {
+-	double time, oldtime, newtime;
++	double oldtime;
++#ifndef __EMSCRIPTEN__
++	double time, newtime;
++#endif
+ 	int i;
+ 
+ #ifdef __linux__
+@@ -344,9 +476,16 @@ int main(int argc, char **argv)
+ 	if (COM_CheckParm(cmdline_param_client_nostdoutput))
+ 		sys_nostdout.value = 1;
+ 
+-	Host_Init (argc, argv, 256 * 1024 * 1024);
++#ifdef __EMSCRIPTEN__
++	Host_Init(argc, argv, 64 * 1024 * 1024);
++#else
++	Host_Init(argc, argv, 256 * 1024 * 1024);
++#endif
+ 
+ 	oldtime = Sys_DoubleTime ();
++#ifdef __EMSCRIPTEN__
++	webtf_oldtime = oldtime;
++#else
+ 	while (1) {
+ 		// find time spent rendering last frame
+ 		newtime = Sys_DoubleTime();
+@@ -355,6 +494,8 @@ int main(int argc, char **argv)
+ 
+ 		Host_Frame(time);
+ 	}
++#endif
++	return 0;
+ }
+ 
+ void Sys_MakeCodeWriteable (unsigned long startaddr, unsigned long length) {
+diff --git a/src/vid_sdl2.c b/src/vid_sdl2.c
+index d77ca3919..29db800a1 100644
+--- a/src/vid_sdl2.c
++++ b/src/vid_sdl2.c
+@@ -699,7 +699,7 @@ byte Key_CharacterToQuakeCode(char ch)
+ 	return Key_ScancodeToQuakeCode(scancode);
+ }
+ 
+-wchar Key_Event_TextInput(wchar unichar);
++void Key_Event_TextInput(wchar unichar);
+ 
+ static void keyb_textinputevent(char* text)
+ {
+

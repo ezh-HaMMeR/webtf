@@ -1,82 +1,46 @@
 # WebTF
 
-Технический прототип браузерного MVD-плеера для QWTF.NET. Рендеринг и
-воспроизведение выполняет FTEQW, собранный в WebAssembly. Интерфейс страницы
-управляет движком через JavaScript API.
+Technical prototype of the actual **ezquake-tf** client compiled to WebAssembly/WebGL. The goal is
+full playback of QWTF/TF2003 MVD demos first, followed by live QTV viewing from qwtf.net servers.
 
-## Что уже есть
+This repository deliberately does not use FTE or a JavaScript MVD renderer. The engine patch is
+applied to the pinned ezquake-tf revision in `engine/ezquake.commit`.
 
-- запуск `.mvd` в браузере;
-- play/pause и переход на 10 секунд;
-- переключение наблюдаемого игрока;
-- показ игрового scoreboard;
-- громкость и полноэкранный режим;
-- открытие другой локальной демки через системный выбор файла;
-- определение карты, game directory, длительности и типа MVD-потока;
-- подготовка TF-PAK и карты из установленного `ezquake-tf` без добавления их в Git.
+## Local requirements
 
-## Локальный запуск
+- Windows 10/11, PowerShell 7, Git, CMake and Ninja
+- ezquake-tf source at `C:\PythonProjects\ezquake-tf`
+- client assets at `C:\Games\ezquake-tf`
+- test demo at `demos\demo.mvd`
 
-Требуются Node.js 22+ и клиент в `C:\Games\ezquake-tf`.
+## Build
 
 ```powershell
-npm install
-npm run prepare-assets
-npm run dev
+cd C:\PythonProjects\qwtf.net\webtf
+.\scripts\install-toolchain.ps1
+.\scripts\prepare-assets.ps1
+.\scripts\setup-engine.ps1
+.\scripts\build.ps1
+.\scripts\serve.ps1
 ```
 
-По умолчанию копируется учебная `speed-4.mvd` из руководства клиента: она достаточно длинная, чтобы проверить воспроизведение, паузу и переходы на 10 секунд.
-Она использует `dm2` и нужна только для проверки запуска движка. Скрипт копирует фактический BSP из `qw/maps`, потому что карты nQuake могут отсутствовать в `id1/pak0.pak`.
+Open `http://localhost:3000/`. Build output and prepared proprietary/game assets are intentionally
+not committed.
 
-Для реальной Team Fortress MVD карта и game directory автоматически определяются по BSP precache и `*gamedir` внутри файла:
+The page starts the bundled TF2003 MVD, accepts a local demo through the file picker, switches the
+tracked player, pauses playback, shows a scoreboard sourced from ezquake-tf state and enters
+fullscreen. All of these actions call the compiled client; the browser page does not parse MVD data.
 
-```powershell
-npm run prepare-assets -- "D:\demos\match.mvd"
-```
+The first load transfers about 180 MiB of locally prepared game data. A production deployment must
+split/cache the data package and serve it with compression and long-lived cache headers.
 
-При необходимости значения можно переопределить прямым вызовом:
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the platform boundary and QTV plan.
 
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\prepare-local-assets.ps1 `
-  -DemoPath "D:\demos\match.mvd.gz" -MapName "2fort5l" -GameDir fortress
-```
+## Current limitations
 
-После повторной подготовки перезапускать dev-сервер не требуется — достаточно
-обновить страницу.
-
-### Ограничение настоящих multi-view MVD
-
-`speed-4.mvd` содержит преимущественно `dem_read`-пакеты и воспроизводится текущей QW Hub FTE WebGL-сборкой нормально. Настоящие серверные MVD из `mvdsv-tf` используют `MVD1`, `dem_all`, `dem_single` и `dem_stats`. Эта сборка FTE читает такой поток до `EndOfDemo` без синхронизации по времени, поэтому WebTF теперь определяет формат заранее и показывает точную ошибку вместо чёрного экрана или последнего кадра.
-
-Для полноценной поддержки таких демок нужен WebAssembly-build `ezquake-tf` либо доработка и сборка FTE с корректным MVD playback и необходимым JavaScript API. Простая конвертация в single-POV означала бы потерю главной функции multi-view MVD — переключения между игроками — поэтому прототип её намеренно не выполняет.
-
-## Почему игровые файлы не находятся в репозитории
-
-`public/local/`, локальный каталог `demos/` и загруженные бинарные файлы FTE находятся в `.gitignore`.
-Скрипт берёт карты, PAK, модели и звуки из локального клиента. Это не позволяет
-случайно опубликовать оригинальные ресурсы Quake/Team Fortress в публичном
-репозитории.
-
-Текущий прототип использует проверенные бинарные файлы FTE WebGL, применяемые
-QuakeWorld Hub. Их адреса и SHA-256 закреплены в скрипте подготовки. Для
-production-версии следует собирать FTEQW из закреплённого исходного commit в CI.
-
-## Ограничения прототипа
-
-- текущий FTE WebGL воспроизводит учебный `dem_read` MVD, но не настоящий multi-view MVD/MVD1;
-- для демки на другой карте нужно повторно запустить подготовку игровых ресурсов;
-- TF-специфичные классы, captures и расширенный scoreboard ещё не вынесены в
-  HTML-интерфейс;
-- онлайн QTV и WebSocket-to-TCP шлюз не входят в этот этап.
-
-## Проверка
-
-```powershell
-npm run lint
-npm run build
-```
-
-## Лицензии
-
-Исходный код оболочки WebTF распространяется по MIT. FTEQW распространяется по
-GPL-2.0. Подробности и ссылки находятся в `THIRD_PARTY.md`.
+- Rendering currently uses ezQuake's classic renderer through Emscripten's legacy OpenGL-to-WebGL
+  compatibility layer. This is suitable for proving complete TF2003 MVD playback, not the final
+  production renderer.
+- Optional sounds absent from the source `C:\Games\ezquake-tf` installation remain absent in the
+  browser build.
+- Live QTV transport, touch controls and production asset delivery are the next milestones.

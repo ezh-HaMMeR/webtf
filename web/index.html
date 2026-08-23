@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WebTF — ezQuake-TF WebAssembly prototype</title>
+    <link rel="stylesheet" href="app.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">QWTF.NET / ТЕХНИЧЕСКИЙ ПРОТОТИП</p>
+          <h1>WebTF</h1>
+        </div>
+        <div class="playback-meta">
+          <div id="tracked-player" class="tracked-player">КАМЕРА: —</div>
+          <div id="status" class="status" data-state="loading">ЗАГРУЗКА ДВИЖКА</div>
+        </div>
+      </header>
+
+      <section class="viewport" aria-label="ezQuake-TF WebGL player">
+        <canvas id="canvas" width="1280" height="720" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+        <aside id="scoreboard-panel" class="scoreboard-panel" aria-label="Скорборд" hidden>
+          <div class="scoreboard-title">TF2003 / SCOREBOARD</div>
+          <table>
+            <thead><tr><th>TEAM</th><th>PLAYER</th><th>FRAGS</th><th>PING</th></tr></thead>
+            <tbody id="scoreboard-body"></tbody>
+          </table>
+        </aside>
+        <div id="progress-overlay" class="progress-overlay">
+          <div class="progress-copy">
+            <span id="progress-label">Подготовка WebAssembly…</span>
+            <progress id="progress" max="100" value="0"></progress>
+          </div>
+        </div>
+      </section>
+
+      <section class="controls">
+        <button id="start" class="primary" type="button" disabled>ЗАПУСТИТЬ ДЕМКУ</button>
+        <div class="control-group" aria-label="Управление камерой">
+          <button id="camera-prev" type="button" disabled>◀ ИГРОК</button>
+          <button id="camera-next" type="button" disabled>ИГРОК ▶</button>
+        </div>
+        <button id="pause" type="button" disabled>ПАУЗА</button>
+        <button id="scoreboard" type="button" disabled>СКОРБОРД</button>
+        <button id="fullscreen" type="button" disabled>ПОЛНЫЙ ЭКРАН</button>
+        <label class="file-button">
+          ОТКРЫТЬ MVD
+          <input id="demo-file" type="file" accept=".mvd,.qwd,.dem" disabled>
+        </label>
+        <span class="hint">Кликните по изображению, чтобы передать управление клиенту.</span>
+      </section>
+
+      <details class="console-panel">
+        <summary>КОНСОЛЬ ДВИЖКА</summary>
+        <pre id="console"></pre>
+      </details>
+    </main>
+
+    <script src="app.js?v=2" type="module"></script>
+  </body>
+</html>

@@ -1,26 +1,17 @@
 # Third-party components
 
-## FTEQW
+WebTF links and redistributes generated output from third-party open-source projects. Their source
+trees and license texts are not vendored into this repository; the build downloads them from their
+upstream projects or through vcpkg.
 
-- Source: https://github.com/fte-team/fteqw
-- License: GNU General Public License version 2
-- Browser build reference: `FTE_TARGET=web`
+- **ezquake-tf / ezQuake** — GNU General Public License v2 or later. The prototype pins commit
+  `32b7f835a322f18f42696d5ed314dfb0aec32f55` from
+  <https://github.com/ezh-HaMMeR/ezquake-tf> and stores the WebAssembly changes as a patch.
+- **Emscripten SDK** — MIT and component licenses; pinned to 6.0.8.
+- **SDL 2** — zlib license; supplied by the Emscripten port.
+- **vcpkg-built libraries** — each package installs its own copyright information into the local
+  build tree. The current prototype uses Expat, libjpeg-turbo, Jansson, MiniZip, PCRE2, libpng,
+  libsndfile, zlib, curl, FreeType, Speex and SpeexDSP.
 
-Prototype engine binaries are downloaded locally by
-`scripts/prepare-local-assets.ps1`, verified by SHA-256, and excluded from this
-repository. A production release should publish its pinned FTEQW source commit
-and reproducible build instructions alongside the WebAssembly artifacts.
-
-## QuakeWorld Hub
-
-- Source: https://github.com/quakeworldnu/hub.quakeworld.nu
-- License: MIT
-
-Its public demo-player and QTV integrations were used as an architectural
-reference for the FTEQW JavaScript bridge and browser controls.
-
-## Game data
-
-Quake and Team Fortress PAK files, maps, models, textures, and sounds are not
-part of this repository. They remain in the user's installed client and are
-copied only into a gitignored local test directory.
+Quake and TeamFortress game data under `assets/` is not committed or redistributed by this
+repository. A local build stages it from the user's existing `C:\Games\ezquake-tf` installation.

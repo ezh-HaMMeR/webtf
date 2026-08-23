@@ -1,0 +1,145 @@
+:root {
+  color-scheme: dark;
+  --bg: #090a0b;
+  --panel: #111315;
+  --line: #303439;
+  --muted: #8d969f;
+  --text: #f2f4f5;
+  --accent: #e35c37;
+  --ready: #69dc8c;
+  font-family: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: radial-gradient(circle at 50% 0, #181b1e 0, var(--bg) 46rem);
+  color: var(--text);
+}
+
+button, .file-button { font: inherit; }
+
+.shell {
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.topbar, .controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  background: rgba(17, 19, 21, .94);
+}
+
+.topbar {
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 0;
+}
+
+.playback-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.tracked-player {
+  max-width: 360px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eyebrow { margin: 0 0 5px; color: var(--muted); font-size: 11px; }
+h1 { margin: 0; font-size: 18px; letter-spacing: .08em; }
+
+.status {
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+  color: #f4c56b;
+  font-size: 11px;
+}
+.status[data-state="ready"] { color: var(--ready); border-color: #356c47; }
+.status[data-state="error"] { color: #ff786e; border-color: #71342f; }
+
+.viewport {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  min-height: 240px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #000;
+}
+
+canvas { display: block; width: 100% !important; height: 100% !important; outline: 0; }
+
+.scoreboard-panel {
+  position: absolute;
+  inset: 7% 12%;
+  z-index: 2;
+  overflow: auto;
+  border: 1px solid #6d7379;
+  background: rgba(5, 6, 7, .93);
+  box-shadow: 0 20px 60px #000b;
+  pointer-events: none;
+}
+.scoreboard-panel[hidden] { display: none; }
+.scoreboard-title { padding: 12px 14px; border-bottom: 1px solid #454a4f; color: #f4c56b; font-size: 12px; font-weight: 700; }
+.scoreboard-panel table { width: 100%; border-collapse: collapse; font-size: clamp(10px, 1.2vw, 14px); }
+.scoreboard-panel th, .scoreboard-panel td { padding: 7px 12px; border-bottom: 1px solid #292d31; text-align: right; }
+.scoreboard-panel th { position: sticky; top: 0; background: #14171a; color: var(--muted); font-size: .8em; }
+.scoreboard-panel th:nth-child(-n+2), .scoreboard-panel td:nth-child(-n+2) { text-align: left; }
+.scoreboard-panel td:nth-child(2) { color: #fff; font-weight: 700; }
+.scoreboard-panel tr.spectator { color: #727a81; }
+
+.progress-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #08090ae8;
+}
+.progress-overlay[hidden] { display: none; }
+.progress-copy { width: min(420px, 80%); color: var(--muted); font-size: 12px; }
+progress { width: 100%; height: 5px; margin-top: 12px; accent-color: var(--accent); }
+
+.controls { flex-wrap: wrap; padding: 12px; border-top: 0; }
+.control-group { display: inline-flex; }
+.control-group button + button { border-left: 0; }
+button, .file-button {
+  min-height: 38px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #41464b;
+  background: #191c1f;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+}
+button:disabled, .file-button:has(input:disabled) { opacity: .42; cursor: default; }
+.primary { background: var(--accent); border-color: var(--accent); }
+button[aria-pressed="true"] { color: #ffd19e; border-color: var(--accent); }
+.file-button input { display: none; }
+.hint { margin-left: auto; color: var(--muted); font-size: 11px; }
+
+.console-panel { margin-top: 12px; border: 1px solid var(--line); background: var(--panel); }
+.console-panel summary { padding: 12px; cursor: pointer; font-size: 11px; }
+#console { margin: 0; max-height: 280px; overflow: auto; padding: 12px; border-top: 1px solid var(--line); color: #b9c2c9; font-size: 11px; white-space: pre-wrap; }
+
+@media (max-width: 720px) {
+  .shell { padding: 0; }
+  .topbar { border-left: 0; border-right: 0; }
+  .viewport, .controls { border-left: 0; border-right: 0; }
+  .hint { width: 100%; margin: 4px 0 0; }
+  .playback-meta { align-items: flex-end; flex-direction: column-reverse; gap: 5px; }
+  .tracked-player { max-width: 190px; }
+}
