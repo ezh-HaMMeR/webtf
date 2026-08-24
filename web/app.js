@@ -35,6 +35,10 @@ let timelineDragging = false;
 let animationFrame;
 let initialTrackTimer;
 
+const DEFAULT_PLAYER_CONFIG = Object.freeze({
+  brightness: 1.08,
+});
+
 function log(message) {
   const line = String(message);
   consoleNode.textContent += `${line}\n`;
@@ -45,6 +49,22 @@ function log(message) {
 function setStatus(text, state) {
   statusNode.textContent = text;
   statusNode.dataset.state = state;
+}
+
+async function loadPlayerConfig() {
+  let config = DEFAULT_PLAYER_CONFIG;
+
+  try {
+    const response = await fetch("./player-config.json", { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    config = { ...DEFAULT_PLAYER_CONFIG, ...await response.json() };
+  } catch (error) {
+    log(`Player config: ${error?.message || error}; using defaults`);
+  }
+
+  const brightness = Math.max(0.5, Math.min(1.5, Number(config.brightness) || 1));
+  document.documentElement.style.setProperty("--webtf-brightness", String(brightness));
+  return { brightness };
 }
 
 function execute(command) {
@@ -229,6 +249,7 @@ function runFrame() {
 
 async function boot() {
   try {
+    await loadPlayerConfig();
     const { default: createWebTF } = await import("./build/ezquake.js?v=130");
     engine = await createWebTF({
       canvas,

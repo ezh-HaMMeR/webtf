@@ -10,6 +10,7 @@
   --accent-dark: #4b2b18;
   --control-bg: #0d0d0f;
   --control-hover: #261a13;
+  --webtf-brightness: 1;
   --ready: #69dc8c;
   font-family: "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
 }
@@ -75,7 +76,13 @@ h1 { margin: 0; font-size: 18px; letter-spacing: .08em; }
   background: #000;
 }
 
-canvas { display: block; width: 100% !important; height: 100% !important; outline: 0; }
+canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  outline: 0;
+  filter: brightness(var(--webtf-brightness));
+}
 
 .player:fullscreen {
   display: grid;

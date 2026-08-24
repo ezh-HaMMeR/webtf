@@ -36,6 +36,10 @@ on `Tab`.
 The first load transfers about 215 MiB of locally prepared game data. A production deployment must
 split/cache the data package and serve it with compression and long-lived cache headers.
 
+Browser-only presentation settings live in `web/player-config.json`. `brightness` is a final-canvas
+multiplier (`1` is unchanged, `1.08` is 8% brighter) and does not depend on ezQuake hardware gamma.
+It takes effect after a page reload and does not require rebuilding WebAssembly or game assets.
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the platform boundary and QTV plan.
 
 ## Current limitations

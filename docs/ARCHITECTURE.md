@@ -49,6 +49,11 @@ restore the classic status bar. SDL audio opens at
 main-thread underruns. Spectator-camera network writes are suppressed during file MVD playback;
 manual selection also disables demo/high-fragger autotracking and locks the selected slot locally.
 
+Because browsers cannot modify the operating system gamma ramp, WebTF treats final-canvas
+brightness as a browser presentation setting. `web/player-config.json` supplies a bounded CSS
+compositor multiplier which is applied after WebGL renders the complete frame, independently of
+the ezQuake `gl_gamma` cvar.
+
 The compatibility path retains CPU alias-model vertices because Fortress configs can change the
 renderer after model loading. It allocates the bounded pose workspace lazily and never calls the GL
 buffer API when WebGL reports buffers unavailable. With `-noatlas`, solid HUD primitives use the
