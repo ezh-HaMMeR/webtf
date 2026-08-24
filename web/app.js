@@ -82,6 +82,20 @@ async function loadPlayerConfig() {
   return { brightness };
 }
 
+async function loadHudConfig() {
+  const url = `${webtfHttpBase}/config/hud.cfg`;
+  try {
+    const response = await browserFetch(url, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const target = "/webtf/fortress/hud-web.cfg";
+    engine.FS.writeFile(target, new TextEncoder().encode(await response.text()));
+    execute("exec hud-web.cfg");
+    log(`HUD config: ${url}`);
+  } catch (error) {
+    log(`HUD config: ${error?.message || error}; using embedded fallback`);
+  }
+}
+
 function normalizeRequestedDemoUrl(value) {
   if (!value) return "";
 
@@ -377,7 +391,7 @@ async function boot() {
 
   try {
     await loadPlayerConfig();
-    const { default: createWebTF } = await import("./build/ezquake.js?v=133");
+    const { default: createWebTF } = await import("./build/ezquake.js?v=134");
     engine = await createWebTF({
       canvas,
       arguments: [
@@ -389,7 +403,7 @@ async function boot() {
       ],
       locateFile(path) {
         const url = new URL(`./build/${path}`, import.meta.url);
-        url.searchParams.set("v", "133");
+        url.searchParams.set("v", "134");
         return url.href;
       },
       print: log,
@@ -403,6 +417,7 @@ async function boot() {
     });
 
     await prepareRuntimeAssets();
+    await loadHudConfig();
 
     startButton.disabled = false;
     fullscreenButton.disabled = false;

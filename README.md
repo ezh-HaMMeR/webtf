@@ -44,6 +44,11 @@ only after the user presses the demo launch button or selects a local MVD.
 HUD WAD replacement pictures are deliberately kept in the core package: ezQuake caches status-bar
 digits during renderer initialization, before the deferred common pack is installed.
 
+`web/config/hud.cfg` is the operational HUD source. The browser requests it with `no-store`, writes
+it to the virtual Fortress directory and executes it before demo playback. It can therefore be
+edited on the server without rebuilding WebAssembly; reload the player page to apply a change. The
+same file is embedded as a build-time fallback, so generated `assets/` must not be edited manually.
+
 The standalone page downloads its external reference demo. A same-origin public demo can be selected
 with `?demo=/webtf/demos/pub/<match-id>.mvd&map=<map-name>`; `&embed=1` removes the prototype header,
 local file picker and engine console for iframe integration. For safety the player accepts only

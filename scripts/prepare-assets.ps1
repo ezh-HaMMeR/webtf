@@ -65,6 +65,10 @@ Copy-Tree 'ezquake'
 Get-ChildItem -LiteralPath (Join-Path $clientRoot 'fortress') -File | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $assetRoot 'fortress') -Force
 }
+$externalHudConfig = Join-Path $projectRoot 'web\config\hud.cfg'
+if (Test-Path -LiteralPath $externalHudConfig -PathType Leaf) {
+    Copy-Item -LiteralPath $externalHudConfig -Destination (Join-Path $assetRoot 'fortress\hud.cfg') -Force
+}
 foreach ($directory in @('fortress\GFX', 'fortress\locs')) {
     Copy-Tree $directory
 }
