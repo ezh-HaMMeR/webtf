@@ -21,8 +21,9 @@ playback is stable, using a small WebSocket-to-QTV bridge next to the existing q
 2. The browser UI sends `playdemo` to the original ezquake-tf command buffer.
 3. ezquake-tf reads MVD1, loads the recorded `fortress` game directory and map assets, and renders
    through its existing SDL/OpenGL renderer translated to WebGL.
-4. Camera switching, HUD and the `Tab` scoreboard stay inside the engine. The HTML shell only
-   exposes transport, manual camera, pause, fullscreen and local-file controls.
+4. Camera switching, HUD and the `Tab` scoreboard stay inside the engine. The HTML shell exposes
+   volume, speed, pause, seek/timeline, manual camera, fullscreen and local-file controls. Small
+   Emscripten exports provide the authoritative demo time, length and seek operation.
 
 The prepared filesystem includes the reference client's `qw/autoexec.cfg`, Fortress settings/HUD,
 TF models and sounds, and both TF/QW replacement texture directories. Windows-only case and parent
@@ -37,8 +38,8 @@ single-texture multipass world path plus CPU-interpolated immediate alias models
 original textures, lightmaps and models without the unstable legacy VBO/client-array path.
 
 The browser platform renders to a fixed 1280x720 canvas which CSS scales with the embedded 16:9
-viewport. Fullscreen preserves 16:9 and centers the largest fitting picture on black letterbox or
-pillarbox areas (for example, 2560x1440 on a 3440x1440 display). SDL restores the backing size after
+viewport. Fullscreen reserves a 46-pixel media bar, then preserves 16:9 and centers the largest
+fitting picture on black letterbox or pillarbox areas. SDL restores the backing size after
 resize/fullscreen events, preventing a stale WebGL viewport from leaving accidental uncovered
 strips. `vid_conscale 1`
 keeps fullscreen HUD layouts proportional in smaller windows. During active demo playback the HTML

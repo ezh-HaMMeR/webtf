@@ -863,7 +863,7 @@ index 775094376..8b111c2ac 100644
  	desired.channels = 1;
  
 diff --git a/src/sys_posix.c b/src/sys_posix.c
-index a4c131074..d77db8fb3 100644
+index a4c131074..84fb8eb4b 100644
 --- a/src/sys_posix.c
 +++ b/src/sys_posix.c
 @@ -45,7 +45,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
@@ -898,13 +898,15 @@ index a4c131074..d77db8fb3 100644
  #ifdef DEBUG
  	va_list argptr;
  	char text[2048];
-@@ -315,9 +332,129 @@ double Sys_DoubleTime(void)
+@@ -315,9 +332,157 @@ double Sys_DoubleTime(void)
  }
  #endif
  
 +static double webtf_oldtime;
 +
 +#ifdef __EMSCRIPTEN__
++extern float CL_GetDemoLength(void);
++
 +EMSCRIPTEN_KEEPALIVE void WebTF_Frame(void)
 +{
 +	double newtime = Sys_DoubleTime();
@@ -928,7 +930,33 @@ index a4c131074..d77db8fb3 100644
 +
 +EMSCRIPTEN_KEEPALIVE double WebTF_DemoTime(void)
 +{
-+	return cls.demotime;
++	return cls.demoplayback ? max(0.0, cls.demotime - demostarttime) : 0.0;
++}
++
++EMSCRIPTEN_KEEPALIVE double WebTF_DemoLength(void)
++{
++	return cls.demoplayback ? max(0.0, CL_GetDemoLength()) : 0.0;
++}
++
++EMSCRIPTEN_KEEPALIVE void WebTF_DemoSeek(double seconds)
++{
++	double length;
++
++	if (!cls.demoplayback)
++		return;
++
++	length = CL_GetDemoLength();
++	if (length <= 0.0)
++		return;
++
++	seconds = bound(0.0, seconds, length);
++	CL_Demo_Jump(seconds, 0, DST_SEEKING_NORMAL);
++}
++
++EMSCRIPTEN_KEEPALIVE double WebTF_Volume(void)
++{
++	cvar_t *volume = Cvar_Find("volume");
++	return volume ? volume->value : 0.0;
 +}
 +
 +EMSCRIPTEN_KEEPALIVE int WebTF_TrackNum(void)
@@ -1029,7 +1057,7 @@ index a4c131074..d77db8fb3 100644
  	int i;
  
  #ifdef __linux__
-@@ -344,9 +481,16 @@ int main(int argc, char **argv)
+@@ -344,9 +509,16 @@ int main(int argc, char **argv)
  	if (COM_CheckParm(cmdline_param_client_nostdoutput))
  		sys_nostdout.value = 1;
  
@@ -1047,7 +1075,7 @@ index a4c131074..d77db8fb3 100644
  	while (1) {
  		// find time spent rendering last frame
  		newtime = Sys_DoubleTime();
-@@ -355,6 +499,8 @@ int main(int argc, char **argv)
+@@ -355,6 +527,8 @@ int main(int argc, char **argv)
  
  		Host_Frame(time);
  	}

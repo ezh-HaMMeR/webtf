@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>WebTF — ezQuake-TF WebAssembly prototype</title>
-    <link rel="stylesheet" href="app.css?v=3">
+    <link rel="stylesheet" href="app.css?v=4">
   </head>
   <body>
     <main class="shell">
@@ -14,29 +14,62 @@
           <h1>WebTF</h1>
         </div>
         <div class="playback-meta">
-          <div id="tracked-player" class="tracked-player">КАМЕРА: —</div>
           <div id="status" class="status" data-state="loading">ЗАГРУЗКА ДВИЖКА</div>
         </div>
       </header>
 
-      <section class="viewport" aria-label="ezQuake-TF WebGL player">
-        <canvas id="canvas" width="1280" height="720" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
-        <div id="progress-overlay" class="progress-overlay">
-          <div class="progress-copy">
-            <span id="progress-label">Подготовка WebAssembly…</span>
-            <progress id="progress" max="100" value="0"></progress>
+      <section id="player" class="player" aria-label="Проигрыватель WebTF">
+        <section class="viewport" aria-label="ezQuake-TF WebGL player">
+          <canvas id="canvas" width="1280" height="720" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+          <div id="progress-overlay" class="progress-overlay">
+            <div class="progress-copy">
+              <span id="progress-label">Подготовка WebAssembly…</span>
+              <progress id="progress" max="100" value="0"></progress>
+            </div>
           </div>
-        </div>
+        </section>
+
+        <section class="controls" aria-label="Управление воспроизведением">
+          <div class="control-cluster audio-controls">
+            <button id="mute" class="icon-control" type="button" aria-label="Выключить звук" title="Выключить звук" disabled>
+              <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"></path><path class="sound-waves" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"></path><path class="mute-slash" d="M4 4l16 16"></path></svg>
+            </button>
+            <input id="volume" class="volume-range" type="range" min="0" max="1" step="0.01" value="0.7" aria-label="Громкость" disabled>
+          </div>
+
+          <div class="control-cluster transport-controls">
+            <button id="seek-back" class="icon-control seek-control" type="button" aria-label="Назад на 5 секунд" title="Назад на 5 секунд" disabled><span aria-hidden="true">↶</span><small>5</small></button>
+            <button id="pause" class="icon-control pause-control" type="button" aria-label="Пауза" title="Пауза" aria-pressed="false" disabled><span class="pause-glyph" aria-hidden="true">Ⅱ</span><span class="play-glyph" aria-hidden="true">▶</span></button>
+            <button id="seek-forward" class="icon-control seek-control" type="button" aria-label="Вперёд на 5 секунд" title="Вперёд на 5 секунд" disabled><span aria-hidden="true">↷</span><small>5</small></button>
+            <label class="rate-control" title="Скорость воспроизведения">
+              <span class="sr-only">Скорость воспроизведения</span>
+              <select id="playback-rate" aria-label="Скорость воспроизведения" disabled>
+                <option value="0.25">0.25×</option>
+                <option value="0.5">0.5×</option>
+                <option value="1" selected>1×</option>
+                <option value="2">2×</option>
+              </select>
+            </label>
+          </div>
+
+          <time id="current-time" class="player-time" datetime="PT0S">0:00</time>
+          <input id="timeline" class="timeline" type="range" min="0" max="1" step="0.1" value="0" aria-label="Позиция демо" disabled>
+          <time id="duration" class="player-time duration" datetime="PT0S">0:00</time>
+
+          <div class="tracking-controls" aria-label="Выбор игрока">
+            <button id="camera-prev" class="track-arrow" type="button" aria-label="Предыдущий игрок" title="Предыдущий игрок" disabled>‹</button>
+            <span id="tracked-player" class="tracked-player">—</span>
+            <button id="camera-next" class="track-arrow" type="button" aria-label="Следующий игрок" title="Следующий игрок" disabled>›</button>
+          </div>
+
+          <button id="fullscreen" class="icon-control fullscreen-control" type="button" aria-label="Полный экран" title="Полный экран" aria-pressed="false" disabled>
+            <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5"></path></svg>
+          </button>
+        </section>
       </section>
 
-      <section class="controls">
+      <section class="utility-controls">
         <button id="start" class="primary" type="button" disabled>ЗАПУСТИТЬ ДЕМКУ</button>
-        <div class="control-group" aria-label="Управление камерой">
-          <button id="camera-prev" type="button" disabled>◀ ИГРОК</button>
-          <button id="camera-next" type="button" disabled>ИГРОК ▶</button>
-        </div>
-        <button id="pause" type="button" disabled>ПАУЗА</button>
-        <button id="fullscreen" type="button" disabled>ПОЛНЫЙ ЭКРАН</button>
         <label class="file-button">
           ОТКРЫТЬ MVD
           <input id="demo-file" type="file" accept=".mvd,.qwd,.dem" disabled>
@@ -50,6 +83,6 @@
       </details>
     </main>
 
-    <script src="app.js?v=21" type="module"></script>
+    <script src="app.js?v=23" type="module"></script>
   </body>
 </html>

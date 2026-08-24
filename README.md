@@ -27,9 +27,11 @@ cd C:\PythonProjects\qwtf.net\webtf
 Open `http://localhost:3000/`. Build output and prepared proprietary/game assets are intentionally
 not committed.
 
-The page starts the bundled TF2003 MVD, accepts a local demo through the file picker, switches the
-tracked player, pauses playback and enters fullscreen. The original ezquake-tf scoreboard is
-available on `Tab`; the browser page does not duplicate it or parse MVD data.
+The page starts the bundled TF2003 MVD, accepts a local demo through the file picker and provides a
+qwtf.net-styled media bar for volume/mute, ±5 second seeking, pause, playback speed, timeline,
+tracked-player switching and fullscreen. Demo duration, position and seeking are supplied by the
+compiled client rather than parsed in JavaScript. The original ezquake-tf scoreboard is available
+on `Tab`.
 
 The first load transfers about 215 MiB of locally prepared game data. A production deployment must
 split/cache the data package and serve it with compression and long-lived cache headers.
@@ -42,8 +44,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the platform boundary and Q
   compatibility layer. This is suitable for proving complete TF2003 MVD playback, not the final
   production renderer.
 - The embedded player keeps a 16:9 viewport and the browser scales a fixed 1280x720 render target.
-  Fullscreen uses the standard browser Fullscreen API and fits that 16:9 picture inside the screen
-  without stretching; wider or taller displays use centered black letterboxing. SDL restores the
+  Fullscreen uses the standard browser Fullscreen API, reserves a compact bottom control bar and
+  fits the remaining 16:9 picture without stretching; wider or taller displays use centered black
+  letterboxing. SDL restores the
   1280x720 canvas backing after every browser resize so the WebGL viewport cannot leave accidental
   black strips. WebTF uses
   `vid_conscale 1` so a fullscreen HUD configuration scales down with the complete canvas.
