@@ -84,5 +84,24 @@ foreach ($name in @('ezquake.js', 'ezquake.wasm', 'ezquake.data')) {
     Copy-Item -LiteralPath $source -Destination (Join-Path $outputRoot $name) -Force
 }
 
+# Nginx serves these precompressed siblings through `gzip_static on`. The
+# browser still sees the original URL and transparently receives fewer bytes.
+foreach ($name in @('ezquake.js', 'ezquake.wasm', 'ezquake.data')) {
+    $source = Join-Path $outputRoot $name
+    $destination = "$source.gz"
+    $input = [IO.File]::OpenRead($source)
+    try {
+        $output = [IO.File]::Open($destination, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try {
+            $gzip = [IO.Compression.GZipStream]::new($output, [IO.Compression.CompressionLevel]::Optimal, $true)
+            try { $input.CopyTo($gzip) } finally { $gzip.Dispose() }
+        } finally {
+            $output.Dispose()
+        }
+    } finally {
+        $input.Dispose()
+    }
+}
+
 Get-ChildItem -LiteralPath $outputRoot -File | Select-Object Name,Length
 Write-Host 'WebTF build completed. Run scripts\serve.ps1.'

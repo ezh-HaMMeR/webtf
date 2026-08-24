@@ -34,10 +34,12 @@ compiled client rather than parsed in JavaScript. The original ezquake-tf scoreb
 on `Tab`.
 
 The asset payload is split instead of embedding the complete client in every launch. The current
-build contains about 71 MiB of core data, a 65 MiB compressed common runtime pack and a small pack
-for each map (for example, `flib10b` is about 0.3 MiB). The selected MVD is also a separate HTTP
-file. Core and runtime/map packs use versioned URLs and long-lived immutable browser caching, so
-opening another match normally transfers only its MVD and a map pack that is not cached yet.
+build contains about 71 MiB of core data (about 40 MiB over HTTP through precompressed static
+delivery), a 40 MiB compressed common runtime pack and a small pack for each map (for example,
+`flib10b` is about 0.3 MiB). The selected MVD is also a separate HTTP file. Engine core, common
+resources, the selected map and MVD are requested in parallel. Core and runtime/map packs use
+versioned URLs and long-lived immutable browser caching, so opening another match normally transfers
+only its MVD and a map pack that is not cached yet.
 Opening the player page itself does not download the engine or game resources; initialization starts
 only after the user presses the demo launch button or selects a local MVD.
 

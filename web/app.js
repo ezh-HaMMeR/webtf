@@ -46,6 +46,8 @@ let animationFrame;
 let initialTrackTimer;
 let requestedDemoPath = "";
 let bootPromise;
+let runtimeAssetsPromise;
+let requestedDemoDownloadPromise;
 const installedPacks = new Set();
 
 if (embeddedMode) document.body.classList.add("embedded");
@@ -115,14 +117,12 @@ function normalizeMapName(value) {
   return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(name) ? name : "";
 }
 
-async function downloadAndInstallPack(key, url, label) {
-  if (installedPacks.has(key)) return;
+async function downloadPack(key, url, label) {
+  if (installedPacks.has(key)) return null;
   if (typeof DecompressionStream !== "function") {
     throw new Error("Этот браузер не поддерживает распаковку игровых ресурсов");
   }
 
-  progressLabel.textContent = `Загрузка ${label}…`;
-  progress.removeAttribute("value");
   const response = await browserFetch(url, { cache: "default" });
   if (!response.ok) throw new Error(`${label}: HTTP ${response.status}`);
   if (!response.body) throw new Error(`${label}: пустой ответ`);
@@ -130,8 +130,7 @@ async function downloadAndInstallPack(key, url, label) {
   const unpacked = await new Response(
     response.body.pipeThrough(new DecompressionStream("gzip")),
   ).arrayBuffer();
-  installPack(new Uint8Array(unpacked));
-  installedPacks.add(key);
+  return { key, label, bytes: new Uint8Array(unpacked) };
 }
 
 function installPack(bytes) {
@@ -162,39 +161,82 @@ function installPack(bytes) {
   if (offset !== bytes.byteLength) throw new Error("Лишние данные в пакете WebTF");
 }
 
-async function prepareRuntimeAssets() {
-  await downloadAndInstallPack(
-    "common-v1",
-    `${webtfHttpBase}/packs/common.wtpak.gz?v=1`,
-    "общих ресурсов",
-  );
+function beginRuntimeAssetDownloads() {
+  if (runtimeAssetsPromise) return runtimeAssetsPromise;
+
+  const downloads = [
+    downloadPack(
+      "common-v2",
+      `${webtfHttpBase}/packs/common.wtpak.gz?v=2`,
+      "общих ресурсов",
+    ),
+  ];
   if (requestedMap) {
-    await downloadAndInstallPack(
+    downloads.push(downloadPack(
       `map-${requestedMap}-v1`,
       `${webtfHttpBase}/packs/maps/${encodeURIComponent(requestedMap)}.wtpak.gz?v=1`,
       `карты ${requestedMap}`,
-    );
+    ));
+  }
+
+  runtimeAssetsPromise = Promise.all(downloads).then(
+    (packs) => ({ packs }),
+    (error) => ({ error }),
+  );
+  return runtimeAssetsPromise;
+}
+
+async function prepareRuntimeAssets(downloads = beginRuntimeAssetDownloads()) {
+  const result = await downloads;
+  if (result.error) {
+    runtimeAssetsPromise = undefined;
+    throw result.error;
+  }
+
+  for (const pack of result.packs) {
+    if (!pack || installedPacks.has(pack.key)) continue;
+    progressLabel.textContent = `Установка ${pack.label}…`;
+    installPack(pack.bytes);
+    installedPacks.add(pack.key);
   }
 }
 
-async function prepareRequestedDemo() {
+function beginRequestedDemoDownload() {
   if (!requestedDemoUrl) throw new Error("Недопустимый адрес MVD");
-  if (requestedDemoPath) return requestedDemoPath;
+  if (requestedDemoDownloadPromise) return requestedDemoDownloadPromise;
 
   const filename = requestedDemoUrl.split("/").pop();
   const target = `/tmp/${filename}`;
-  const originalLabel = startButton.textContent;
+  requestedDemoDownloadPromise = browserFetch(requestedDemoUrl, { cache: "default" })
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return { target, bytes: new Uint8Array(await response.arrayBuffer()) };
+    })
+    .then(
+      (demo) => ({ demo }),
+      (error) => ({ error }),
+    );
+  return requestedDemoDownloadPromise;
+}
 
+async function prepareRequestedDemo(download = beginRequestedDemoDownload()) {
+  if (!requestedDemoUrl) throw new Error("Недопустимый адрес MVD");
+  if (requestedDemoPath) return requestedDemoPath;
+
+  const originalLabel = startButton.textContent;
   startButton.disabled = true;
   startButton.textContent = "ЗАГРУЗКА MVD…";
   setStatus("ЗАГРУЗКА MVD", "loading");
 
   try {
-    const response = await browserFetch(requestedDemoUrl, { cache: "default" });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    engine.FS.writeFile(target, new Uint8Array(await response.arrayBuffer()));
-    requestedDemoPath = target;
-    return target;
+    const result = await download;
+    if (result.error) {
+      requestedDemoDownloadPromise = undefined;
+      throw result.error;
+    }
+    engine.FS.writeFile(result.demo.target, result.demo.bytes);
+    requestedDemoPath = result.demo.target;
+    return requestedDemoPath;
   } finally {
     startButton.disabled = false;
     startButton.textContent = originalLabel;
@@ -390,8 +432,13 @@ async function boot() {
   setStatus("ЗАГРУЗКА ДВИЖКА", "loading");
 
   try {
-    await loadPlayerConfig();
-    const { default: createWebTF } = await import("./build/ezquake.js?v=134");
+    progressLabel.textContent = "Параллельная загрузка движка и игровых ресурсов…";
+    progress.removeAttribute("value");
+    const runtimeDownloads = beginRuntimeAssetDownloads();
+    const [{ default: createWebTF }] = await Promise.all([
+      import("./build/ezquake.js?v=135"),
+      loadPlayerConfig(),
+    ]);
     engine = await createWebTF({
       canvas,
       arguments: [
@@ -403,7 +450,7 @@ async function boot() {
       ],
       locateFile(path) {
         const url = new URL(`./build/${path}`, import.meta.url);
-        url.searchParams.set("v", "134");
+        url.searchParams.set("v", "135");
         return url.href;
       },
       print: log,
@@ -416,7 +463,7 @@ async function boot() {
       },
     });
 
-    await prepareRuntimeAssets();
+    await prepareRuntimeAssets(runtimeDownloads);
     await loadHudConfig();
 
     startButton.disabled = false;
@@ -456,8 +503,9 @@ async function ensureEngine() {
 
 startButton.addEventListener("click", async () => {
   try {
+    const demoDownload = beginRequestedDemoDownload();
     await ensureEngine();
-    const demoPath = await prepareRequestedDemo();
+    const demoPath = await prepareRequestedDemo(demoDownload);
     started = true;
     setPlaybackControls(true);
     play(demoPath);
