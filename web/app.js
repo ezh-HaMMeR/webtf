@@ -11,9 +11,10 @@ const cameraNextButton = document.querySelector("#camera-next");
 const pauseButton = document.querySelector("#pause");
 const muteButton = document.querySelector("#mute");
 const volumeInput = document.querySelector("#volume");
-const seekBackButton = document.querySelector("#seek-back");
-const seekForwardButton = document.querySelector("#seek-forward");
-const playbackRateInput = document.querySelector("#playback-rate");
+const playbackRateButton = document.querySelector("#playback-rate");
+const playbackRateValue = document.querySelector("#playback-rate-value");
+const playbackRateMenu = document.querySelector("#playback-rate-menu");
+const playbackRateOptions = [...playbackRateMenu.querySelectorAll("[data-rate]")];
 const currentTimeNode = document.querySelector("#current-time");
 const durationNode = document.querySelector("#duration");
 const timeline = document.querySelector("#timeline");
@@ -29,6 +30,7 @@ let started = false;
 let paused = false;
 let muted = false;
 let previousVolume = 0.7;
+let playbackRate = 1;
 let timelineDragging = false;
 let animationFrame;
 let initialTrackTimer;
@@ -54,9 +56,7 @@ function setPlaybackControls(enabled) {
     cameraPrevButton,
     cameraNextButton,
     pauseButton,
-    seekBackButton,
-    seekForwardButton,
-    playbackRateInput,
+    playbackRateButton,
     timeline,
   ]) {
     control.disabled = !enabled;
@@ -106,7 +106,7 @@ function resetToggles() {
   pauseButton.setAttribute("aria-pressed", "false");
   pauseButton.setAttribute("aria-label", "Пауза");
   pauseButton.title = "Пауза";
-  playbackRateInput.value = "1";
+  setPlaybackRate(1, false);
   execute("cl_demospeed 1");
 }
 
@@ -151,11 +151,6 @@ function seekTo(seconds) {
   updateTimeNode(currentTimeNode, target);
 }
 
-function seekBy(seconds) {
-  const time = engine?.ccall("WebTF_DemoTime", "number", [], []) || 0;
-  seekTo(time + seconds);
-}
-
 function setMutedState(value) {
   muted = value;
   muteButton.classList.toggle("is-muted", muted);
@@ -167,6 +162,34 @@ function applyVolume(value) {
   const volume = Math.max(0, Math.min(1, Number(value) || 0));
   execute(`volume ${volume.toFixed(2)}`);
   setMutedState(volume === 0);
+}
+
+function setRateMenuOpen(open) {
+  playbackRateMenu.hidden = !open;
+  playbackRateButton.setAttribute("aria-expanded", String(open));
+  if (open) {
+    playbackRateOptions.find((option) => option.getAttribute("aria-selected") === "true")
+      ?.focus({ preventScroll: true });
+  }
+}
+
+function setPlaybackRate(value, applyToEngine = true) {
+  const rate = Number(value) || 1;
+  playbackRate = rate;
+  playbackRateValue.textContent = `${rate}×`;
+  playbackRateButton.setAttribute("aria-label", `Скорость воспроизведения: ${rate}×`);
+  for (const option of playbackRateOptions) {
+    option.setAttribute("aria-selected", String(Number(option.dataset.rate) === rate));
+  }
+  setRateMenuOpen(false);
+
+  if (applyToEngine) {
+    paused = false;
+    pauseButton.setAttribute("aria-pressed", "false");
+    pauseButton.setAttribute("aria-label", "Пауза");
+    pauseButton.title = "Пауза";
+    execute(`cl_demospeed ${rate}`);
+  }
 }
 
 function updatePlaybackStatus() {
@@ -269,22 +292,43 @@ cameraNextButton.addEventListener("click", () => {
 
 pauseButton.addEventListener("click", () => {
   paused = !paused;
-  execute(`cl_demospeed ${paused ? 0 : Number(playbackRateInput.value) || 1}`);
+  execute(`cl_demospeed ${paused ? 0 : playbackRate}`);
   pauseButton.setAttribute("aria-pressed", String(paused));
   pauseButton.setAttribute("aria-label", paused ? "Продолжить" : "Пауза");
   pauseButton.title = paused ? "Продолжить" : "Пауза";
   updatePlaybackStatus();
 });
 
-seekBackButton.addEventListener("click", () => seekBy(-5));
-seekForwardButton.addEventListener("click", () => seekBy(5));
+playbackRateButton.addEventListener("click", () => {
+  setRateMenuOpen(playbackRateMenu.hidden);
+});
 
-playbackRateInput.addEventListener("change", () => {
-  paused = false;
-  pauseButton.setAttribute("aria-pressed", "false");
-  pauseButton.setAttribute("aria-label", "Пауза");
-  pauseButton.title = "Пауза";
-  execute(`cl_demospeed ${Number(playbackRateInput.value) || 1}`);
+for (const option of playbackRateOptions) {
+  option.addEventListener("click", () => setPlaybackRate(option.dataset.rate));
+}
+
+document.addEventListener("pointerdown", (event) => {
+  if (!playbackRateMenu.hidden && !event.target.closest(".rate-control")) {
+    setRateMenuOpen(false);
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (!playbackRateMenu.hidden && event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    setRateMenuOpen(false);
+    playbackRateButton.focus({ preventScroll: true });
+  }
+}, true);
+
+playbackRateMenu.addEventListener("keydown", (event) => {
+  if (!["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  event.preventDefault();
+  const current = playbackRateOptions.indexOf(document.activeElement);
+  const direction = event.key === "ArrowUp" ? -1 : 1;
+  playbackRateOptions[(current + direction + playbackRateOptions.length) % playbackRateOptions.length]
+    .focus({ preventScroll: true });
 });
 
 timeline.addEventListener("pointerdown", () => {
@@ -329,6 +373,12 @@ document.addEventListener("fullscreenchange", () => {
 
 // SDL listens for mouse input on the document. Keep player UI clicks from also
 // becoming fire/camera commands inside ezquake-tf.
+controls.addEventListener("pointerdown", (event) => {
+  if (!playbackRateMenu.hidden && !event.target.closest(".rate-control")) {
+    setRateMenuOpen(false);
+  }
+});
+
 for (const container of [controls, utilityControls]) {
   for (const eventName of ["pointerdown", "pointerup", "mousedown", "mouseup", "wheel"]) {
     container.addEventListener(eventName, (event) => event.stopPropagation());

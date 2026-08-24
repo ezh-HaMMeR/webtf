@@ -28,7 +28,7 @@ Open `http://localhost:3000/`. Build output and prepared proprietary/game assets
 not committed.
 
 The page starts the bundled TF2003 MVD, accepts a local demo through the file picker and provides a
-qwtf.net-styled media bar for volume/mute, ±5 second seeking, pause, playback speed, timeline,
+qwtf.net-styled media bar for volume/mute, pause, playback speed, timeline seeking,
 tracked-player switching and fullscreen. Demo duration, position and seeking are supplied by the
 compiled client rather than parsed in JavaScript. The original ezquake-tf scoreboard is available
 on `Tab`.

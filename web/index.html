@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>WebTF — ezQuake-TF WebAssembly prototype</title>
-    <link rel="stylesheet" href="app.css?v=4">
+    <link rel="stylesheet" href="app.css?v=5">
   </head>
   <body>
     <main class="shell">
@@ -38,18 +38,19 @@
           </div>
 
           <div class="control-cluster transport-controls">
-            <button id="seek-back" class="icon-control seek-control" type="button" aria-label="Назад на 5 секунд" title="Назад на 5 секунд" disabled><span aria-hidden="true">↶</span><small>5</small></button>
             <button id="pause" class="icon-control pause-control" type="button" aria-label="Пауза" title="Пауза" aria-pressed="false" disabled><span class="pause-glyph" aria-hidden="true">Ⅱ</span><span class="play-glyph" aria-hidden="true">▶</span></button>
-            <button id="seek-forward" class="icon-control seek-control" type="button" aria-label="Вперёд на 5 секунд" title="Вперёд на 5 секунд" disabled><span aria-hidden="true">↷</span><small>5</small></button>
-            <label class="rate-control" title="Скорость воспроизведения">
-              <span class="sr-only">Скорость воспроизведения</span>
-              <select id="playback-rate" aria-label="Скорость воспроизведения" disabled>
-                <option value="0.25">0.25×</option>
-                <option value="0.5">0.5×</option>
-                <option value="1" selected>1×</option>
-                <option value="2">2×</option>
-              </select>
-            </label>
+            <div class="rate-control">
+              <button id="playback-rate" class="rate-button" type="button" aria-label="Скорость воспроизведения" aria-haspopup="listbox" aria-expanded="false" disabled>
+                <span id="playback-rate-value">1×</span>
+                <span class="rate-chevron" aria-hidden="true">⌃</span>
+              </button>
+              <div id="playback-rate-menu" class="rate-menu" role="listbox" aria-label="Скорость воспроизведения" hidden>
+                <button type="button" role="option" data-rate="0.25" aria-selected="false">0.25×</button>
+                <button type="button" role="option" data-rate="0.5" aria-selected="false">0.5×</button>
+                <button type="button" role="option" data-rate="1" aria-selected="true">1×</button>
+                <button type="button" role="option" data-rate="2" aria-selected="false">2×</button>
+              </div>
+            </div>
           </div>
 
           <time id="current-time" class="player-time" datetime="PT0S">0:00</time>
@@ -83,6 +84,6 @@
       </details>
     </main>
 
-    <script src="app.js?v=23" type="module"></script>
+    <script src="app.js?v=25" type="module"></script>
   </body>
 </html>

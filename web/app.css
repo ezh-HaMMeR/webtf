@@ -194,8 +194,6 @@ button[aria-pressed="true"] { color: var(--accent-bright); border-color: var(--a
 #mute.is-muted .sound-waves { display: none; }
 #mute.is-muted .mute-slash { display: block; }
 
-.seek-control { position: relative; font-size: 20px; }
-.seek-control small { margin-left: -5px; font-size: 8px; font-weight: 800; }
 .pause-control { width: 42px; font-size: 16px; }
 .play-glyph { display: none; font-size: 14px; }
 .pause-control[aria-pressed="true"] .pause-glyph { display: none; }
@@ -236,17 +234,72 @@ button[aria-pressed="true"] { color: var(--accent-bright); border-color: var(--a
   appearance: none;
 }
 
-.rate-control { display: inline-flex; align-items: center; }
-.rate-control select {
+.rate-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.rate-button {
   height: 44px;
-  padding: 0 22px 0 8px;
+  min-height: 44px;
+  gap: 9px;
+  padding: 0 9px;
   border: 0;
-  background: var(--control-bg);
+  background: transparent;
   color: var(--accent-bright);
   cursor: pointer;
   font: inherit;
   font-size: 11px;
   font-weight: 800;
+}
+
+.rate-button:not(:disabled):hover,
+.rate-button[aria-expanded="true"] { background: var(--control-hover); }
+.rate-chevron { color: #c8783d; font-size: 13px; }
+.rate-button[aria-expanded="true"] .rate-chevron { color: var(--accent-bright); }
+
+.rate-menu {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 5px);
+  left: 0;
+  width: 94px;
+  padding: 4px;
+  border: 1px solid #7b4a2b;
+  background: linear-gradient(180deg, #23170f 0, #0d0d0f 100%);
+  box-shadow: 0 -7px 22px #000b, inset 0 0 0 1px #2e2018;
+}
+
+.rate-menu[hidden] { display: none; }
+
+.rate-menu button {
+  width: 100%;
+  min-height: 30px;
+  justify-content: flex-start;
+  padding: 0 9px;
+  border: 0;
+  background: transparent;
+  color: #dc9560;
+  font-size: 11px;
+}
+
+.rate-menu button:hover,
+.rate-menu button:focus-visible {
+  outline: 0;
+  background: #3a2416;
+  color: #ffd0a2;
+}
+
+.rate-menu button[aria-selected="true"] {
+  background: #5a321a;
+  color: #fff0df;
+  box-shadow: inset 2px 0 var(--accent-bright);
+}
+
+.rate-button:focus-visible {
+  outline: 1px solid var(--accent-bright);
+  outline-offset: -3px;
 }
 
 .player-time {
@@ -292,8 +345,6 @@ button[aria-pressed="true"] { color: var(--accent-bright); border-color: var(--a
 }
 
 .hint { margin-left: auto; color: var(--muted); font-size: 11px; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
-
 .console-panel { margin-top: 12px; border: 1px solid var(--line); background: var(--panel); }
 .console-panel summary { padding: 12px; cursor: pointer; font-size: 11px; }
 #console { margin: 0; max-height: 280px; overflow: auto; padding: 12px; border-top: 1px solid var(--line); color: #b9c2c9; font-size: 11px; white-space: pre-wrap; }
