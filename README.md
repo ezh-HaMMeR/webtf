@@ -42,8 +42,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the platform boundary and Q
   compatibility layer. This is suitable for proving complete TF2003 MVD playback, not the final
   production renderer.
 - The embedded player keeps a 16:9 viewport and the browser scales a fixed 1280x720 render target.
-  Fullscreen uses the standard browser Fullscreen API; SDL restores the 1280x720 canvas backing
-  after every browser resize so the WebGL viewport cannot leave black strips. WebTF uses
+  Fullscreen uses the standard browser Fullscreen API and fits that 16:9 picture inside the screen
+  without stretching; wider or taller displays use centered black letterboxing. SDL restores the
+  1280x720 canvas backing after every browser resize so the WebGL viewport cannot leave accidental
+  black strips. WebTF uses
   `vid_conscale 1` so a fullscreen HUD configuration scales down with the complete canvas.
 - Demo playback forces `cl_sbar 0` and `viewsize 100`, keeping the classic Quake status bar hidden
   even when a late Fortress/class configuration tries to restore it.

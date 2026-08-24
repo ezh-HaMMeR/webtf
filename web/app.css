@@ -81,11 +81,29 @@ h1 { margin: 0; font-size: 18px; letter-spacing: .08em; }
 canvas { display: block; width: 100% !important; height: 100% !important; outline: 0; }
 
 .viewport:fullscreen {
+  display: grid;
+  place-items: center;
   width: 100vw;
   height: 100vh;
   min-height: 0;
   border: 0;
   aspect-ratio: auto;
+}
+
+.viewport:fullscreen canvas { aspect-ratio: 16 / 9; }
+
+@media (min-aspect-ratio: 16 / 9) {
+  .viewport:fullscreen canvas {
+    width: auto !important;
+    height: 100vh !important;
+  }
+}
+
+@media (max-aspect-ratio: 16 / 9) {
+  .viewport:fullscreen canvas {
+    width: 100vw !important;
+    height: auto !important;
+  }
 }
 
 .progress-overlay {

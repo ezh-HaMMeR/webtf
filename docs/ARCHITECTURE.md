@@ -37,8 +37,10 @@ single-texture multipass world path plus CPU-interpolated immediate alias models
 original textures, lightmaps and models without the unstable legacy VBO/client-array path.
 
 The browser platform renders to a fixed 1280x720 canvas which CSS scales with the embedded 16:9
-viewport or the browser fullscreen element. SDL restores that backing size after resize/fullscreen
-events, preventing a stale WebGL viewport from leaving uncovered black strips. `vid_conscale 1`
+viewport. Fullscreen preserves 16:9 and centers the largest fitting picture on black letterbox or
+pillarbox areas (for example, 2560x1440 on a 3440x1440 display). SDL restores the backing size after
+resize/fullscreen events, preventing a stale WebGL viewport from leaving accidental uncovered
+strips. `vid_conscale 1`
 keeps fullscreen HUD layouts proportional in smaller windows. During active demo playback the HTML
 shell repeatedly enforces `cl_sbar 0` and `viewsize 100`, so late Fortress/class configs cannot
 restore the classic status bar. SDL audio opens at
