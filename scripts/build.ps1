@@ -8,6 +8,7 @@ $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $engineRoot = Join-Path $projectRoot '.work\ezquake-tf'
 $buildRoot = Join-Path $projectRoot '.work\build-web'
 $assetRoot = Join-Path $projectRoot 'assets'
+$packRoot = Join-Path $projectRoot 'web\packs'
 $outputRoot = Join-Path $projectRoot 'web\build'
 $emsdkRoot = Join-Path $projectRoot '.tools\emsdk'
 $emscriptenRoot = Join-Path $emsdkRoot 'upstream\emscripten'
@@ -20,11 +21,15 @@ if (-not (Test-Path -LiteralPath (Join-Path $emscriptenRoot 'emcc.exe'))) {
 if (-not (Test-Path -LiteralPath (Join-Path $engineRoot 'CMakeLists.txt'))) {
     throw 'Patched engine checkout is missing. Run scripts\setup-engine.ps1 first.'
 }
-if (-not $SkipAssets -and -not (Test-Path -LiteralPath (Join-Path $assetRoot 'demos\demo.mvd'))) {
+if (-not $SkipAssets) {
     & (Join-Path $PSScriptRoot 'prepare-assets.ps1')
+    & (Join-Path $PSScriptRoot 'build-packs.ps1')
 }
-if (-not (Test-Path -LiteralPath (Join-Path $assetRoot 'demos\demo.mvd'))) {
+if (-not (Test-Path -LiteralPath (Join-Path $assetRoot 'id1\pak0.pak'))) {
     throw 'Prepared assets are missing. Run scripts\prepare-assets.ps1 first.'
+}
+if (-not (Test-Path -LiteralPath (Join-Path $packRoot 'common.wtpak.gz'))) {
+    throw 'Runtime packs are missing. Run scripts\build-packs.ps1 first.'
 }
 
 $env:EMSDK = $emsdkRoot.Replace('\', '/')
@@ -58,6 +63,14 @@ cmake -S $engineRoot -B $buildRoot -G Ninja `
     '-DCMAKE_BUILD_TYPE=Release' `
     "-DWEBTF_ASSET_DIR=$assetRoot"
 if ($LASTEXITCODE -ne 0) { throw 'Unable to configure ezquake-tf for WebAssembly.' }
+
+# Asset files are embedded at link time but are not ordinary Ninja inputs.
+# Removing only final products forces a relink without recompiling all objects.
+if (-not $SkipAssets) {
+    foreach ($name in @('ezquake.js', 'ezquake.wasm', 'ezquake.data')) {
+        [IO.File]::Delete((Join-Path $buildRoot $name))
+    }
+}
 
 cmake --build $buildRoot --target ezquake --parallel
 if ($LASTEXITCODE -ne 0) { throw 'ezquake-tf WebAssembly build failed.' }

@@ -9,4 +9,4 @@ if (-not (Test-Path -LiteralPath (Join-Path $webRoot 'build\ezquake.js'))) {
 }
 
 Write-Host "WebTF: http://localhost:$Port/"
-python -m http.server $Port --directory $webRoot
+python (Join-Path $PSScriptRoot 'dev-server.py') $Port

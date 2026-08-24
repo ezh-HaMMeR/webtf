@@ -3,7 +3,10 @@
 build/
 web/build/
 assets/
+pack-assets/
+web/packs/
 *.log
+__pycache__/
 
 # The reference demo is kept in Git LFS / local storage separately.
 demos/*

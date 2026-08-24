@@ -27,7 +27,13 @@ const viewport = document.querySelector(".viewport");
 const browserFetch = window.fetch.bind(window);
 const pageParams = new URLSearchParams(window.location.search);
 const embeddedMode = pageParams.get("embed") === "1";
-const requestedDemoUrl = normalizeRequestedDemoUrl(pageParams.get("demo"));
+const webtfHttpBase = window.location.pathname.startsWith("/webtf") ? "/webtf" : "";
+const requestedDemoParameter = pageParams.get("demo");
+const requestedDemoUrl = requestedDemoParameter
+  ? normalizeRequestedDemoUrl(requestedDemoParameter)
+  : `${webtfHttpBase}/demos/demo.mvd`;
+const requestedMap = normalizeMapName(pageParams.get("map"))
+  || (requestedDemoParameter ? "" : "bastion");
 
 let engine;
 let started = false;
@@ -39,6 +45,7 @@ let timelineDragging = false;
 let animationFrame;
 let initialTrackTimer;
 let requestedDemoPath = "";
+const installedPacks = new Set();
 
 if (embeddedMode) document.body.classList.add("embedded");
 
@@ -79,7 +86,7 @@ function normalizeRequestedDemoUrl(value) {
 
   try {
     const url = new URL(value, window.location.href);
-    const allowedPath = /^\/webtf\/demos\/pub\/[a-zA-Z0-9][a-zA-Z0-9_.-]*\.mvd$/;
+    const allowedPath = /^(?:\/webtf)?\/demos\/(?:demo|pub\/[a-zA-Z0-9][a-zA-Z0-9_.-]*)\.mvd$/;
     return url.origin === window.location.origin && allowedPath.test(url.pathname)
       ? url.pathname
       : "";
@@ -88,8 +95,75 @@ function normalizeRequestedDemoUrl(value) {
   }
 }
 
+function normalizeMapName(value) {
+  const name = String(value || "").trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(name) ? name : "";
+}
+
+async function downloadAndInstallPack(key, url, label) {
+  if (installedPacks.has(key)) return;
+  if (typeof DecompressionStream !== "function") {
+    throw new Error("Этот браузер не поддерживает распаковку игровых ресурсов");
+  }
+
+  progressLabel.textContent = `Загрузка ${label}…`;
+  progress.removeAttribute("value");
+  const response = await browserFetch(url, { cache: "default" });
+  if (!response.ok) throw new Error(`${label}: HTTP ${response.status}`);
+  if (!response.body) throw new Error(`${label}: пустой ответ`);
+
+  const unpacked = await new Response(
+    response.body.pipeThrough(new DecompressionStream("gzip")),
+  ).arrayBuffer();
+  installPack(new Uint8Array(unpacked));
+  installedPacks.add(key);
+}
+
+function installPack(bytes) {
+  const magic = new TextDecoder("ascii").decode(bytes.subarray(0, 8));
+  if (magic !== "WEBTFPK1" || bytes.byteLength < 12) {
+    throw new Error("Неверный формат пакета WebTF");
+  }
+
+  const manifestLength = new DataView(bytes.buffer, bytes.byteOffset + 8, 4).getUint32(0, true);
+  const payloadOffset = 12 + manifestLength;
+  if (payloadOffset > bytes.byteLength) throw new Error("Повреждён заголовок пакета WebTF");
+  const manifest = JSON.parse(new TextDecoder().decode(bytes.subarray(12, payloadOffset)));
+  let offset = payloadOffset;
+
+  for (const file of manifest.files || []) {
+    const path = String(file.path || "");
+    const size = Number(file.size);
+    const relativeParts = path.startsWith("/webtf/") ? path.slice(7).split("/") : [];
+    if (!relativeParts.length || relativeParts.some((part) => !part || part === "." || part === "..")
+      || path.includes("\\") || path.includes("\0")
+      || !Number.isSafeInteger(size) || size < 0 || offset + size > bytes.byteLength) {
+      throw new Error("Повреждён список файлов пакета WebTF");
+    }
+    engine.FS.mkdirTree(path.slice(0, path.lastIndexOf("/")));
+    engine.FS.writeFile(path, bytes.subarray(offset, offset + size));
+    offset += size;
+  }
+  if (offset !== bytes.byteLength) throw new Error("Лишние данные в пакете WebTF");
+}
+
+async function prepareRuntimeAssets() {
+  await downloadAndInstallPack(
+    "common-v1",
+    `${webtfHttpBase}/packs/common.wtpak.gz?v=1`,
+    "общих ресурсов",
+  );
+  if (requestedMap) {
+    await downloadAndInstallPack(
+      `map-${requestedMap}-v1`,
+      `${webtfHttpBase}/packs/maps/${encodeURIComponent(requestedMap)}.wtpak.gz?v=1`,
+      `карты ${requestedMap}`,
+    );
+  }
+}
+
 async function prepareRequestedDemo() {
-  if (!requestedDemoUrl) return "/webtf/demos/demo.mvd";
+  if (!requestedDemoUrl) throw new Error("Недопустимый адрес MVD");
   if (requestedDemoPath) return requestedDemoPath;
 
   const filename = requestedDemoUrl.split("/").pop();
@@ -262,7 +336,7 @@ function updatePlaybackStatus() {
   const active = engine.ccall("WebTF_DemoPlayback", "number", [], []);
   const time = engine.ccall("WebTF_DemoTime", "number", [], []);
   const length = engine.ccall("WebTF_DemoLength", "number", [], []);
-  const track = engine.ccall("WebTF_TrackNum", "number", [], []);
+  const track = engine.ccall("WebTF_ViewPlayerNum", "number", [], []);
   const namePointer = engine.ccall("WebTF_TrackedName", "number", [], []);
   const name = namePointer ? engine.UTF8ToString(namePointer) : "";
 
@@ -295,7 +369,7 @@ function runFrame() {
 async function boot() {
   try {
     await loadPlayerConfig();
-    const { default: createWebTF } = await import("./build/ezquake.js?v=131");
+    const { default: createWebTF } = await import("./build/ezquake.js?v=132");
     engine = await createWebTF({
       canvas,
       arguments: [
@@ -307,7 +381,7 @@ async function boot() {
       ],
       locateFile(path) {
         const url = new URL(`./build/${path}`, import.meta.url);
-        url.searchParams.set("v", "131");
+        url.searchParams.set("v", "132");
         return url.href;
       },
       print: log,
@@ -320,6 +394,8 @@ async function boot() {
       },
     });
 
+    await prepareRuntimeAssets();
+
     startButton.disabled = false;
     fullscreenButton.disabled = false;
     demoInput.disabled = false;
@@ -329,6 +405,7 @@ async function boot() {
     previousVolume = Math.max(0.01, Math.min(1, Number(initialVolume) || 0.7));
     volumeInput.value = String(Math.max(0, Math.min(1, Number(initialVolume) || 0)));
     setMutedState(initialVolume <= 0);
+    progress.value = 100;
     overlay.hidden = true;
     setStatus("ДВИЖОК ГОТОВ", "ready");
     animationFrame = window.requestAnimationFrame(runFrame);

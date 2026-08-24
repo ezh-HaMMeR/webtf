@@ -17,11 +17,12 @@ playback is stable, using a small WebSocket-to-QTV bridge next to the existing q
 
 ## Data flow
 
-1. Emscripten mounts the prepared Quake filesystem at `/webtf`.
-2. The browser UI sends `playdemo` to the original ezquake-tf command buffer.
-3. ezquake-tf reads MVD1, loads the recorded `fortress` game directory and map assets, and renders
+1. Emscripten mounts a small prepared core filesystem at `/webtf`.
+2. The browser installs an immutable common runtime pack and the selected map pack into MEMFS.
+3. The browser fetches the selected MVD separately and sends `playdemo` to the original ezquake-tf command buffer.
+4. ezquake-tf reads MVD1, loads the recorded `fortress` game directory and map assets, and renders
    through its existing SDL/OpenGL renderer translated to WebGL.
-4. Camera switching, HUD and the `Tab` scoreboard stay inside the engine. The HTML shell exposes
+5. Camera switching, HUD and the `Tab` scoreboard stay inside the engine. The HTML shell exposes
    volume, speed, pause, seek/timeline, manual camera, fullscreen and local-file controls. Small
    Emscripten exports provide the authoritative demo time, length and seek operation.
 
@@ -30,10 +31,11 @@ TF models and sounds, and both TF/QW replacement texture directories. Windows-on
 path assumptions are normalized in the generated asset copy; the source client installation is
 never modified.
 
-The browser data package also contains the complete installed `fortress/maps` and `fortress/lits`
-trees. This is intentionally larger than the original single-demo prototype: `/pub` can select any
-recorded public match, so the matching BSP and optional colored-light file must already be available
-inside Emscripten's read-only game filesystem.
+Maps are no longer embedded into the monolithic Emscripten `.data` file. The build produces one
+compressed package per installed BSP containing that map, its ENT and optional LIT. `/pub` passes the
+match map name to WebTF, which loads only the corresponding package before starting the MVD. Shared
+models, sounds, skins and replacement textures live in one versioned common package. Stable core,
+common and map URLs are cached independently, while every MVD remains an ordinary separate file.
 
 The black/flat-world failure found during the prototype was not an MVD parser problem. It combined
 several desktop-OpenGL assumptions: an RGB/RGBA upload mismatch rejected by WebGL, fixed-function

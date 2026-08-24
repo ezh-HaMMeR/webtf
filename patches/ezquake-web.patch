@@ -898,7 +898,7 @@ index a4c131074..84fb8eb4b 100644
  #ifdef DEBUG
  	va_list argptr;
  	char text[2048];
-@@ -315,9 +332,157 @@ double Sys_DoubleTime(void)
+@@ -315,9 +332,167 @@ double Sys_DoubleTime(void)
  }
  #endif
  
@@ -964,10 +964,20 @@ index a4c131074..84fb8eb4b 100644
 +	return Cam_TrackNum();
 +}
 +
++EMSCRIPTEN_KEEPALIVE int WebTF_ViewPlayerNum(void)
++{
++	int track = Cam_TrackNum();
++
++	if (track < 0 || cl.viewplayernum < 0 || cl.viewplayernum >= MAX_CLIENTS)
++		return -1;
++
++	return cl.viewplayernum;
++}
++
 +EMSCRIPTEN_KEEPALIVE const char *WebTF_TrackedName(void)
 +{
 +	static char name[MAX_SCOREBOARDNAME];
-+	int track = Cam_TrackNum();
++	int track = WebTF_ViewPlayerNum();
 +
 +	if (track < 0 || track >= MAX_CLIENTS)
 +		return "";
@@ -1057,7 +1067,7 @@ index a4c131074..84fb8eb4b 100644
  	int i;
  
  #ifdef __linux__
-@@ -344,9 +509,16 @@ int main(int argc, char **argv)
+@@ -344,9 +519,16 @@ int main(int argc, char **argv)
  	if (COM_CheckParm(cmdline_param_client_nostdoutput))
  		sys_nostdout.value = 1;
  
@@ -1075,7 +1085,7 @@ index a4c131074..84fb8eb4b 100644
  	while (1) {
  		// find time spent rendering last frame
  		newtime = Sys_DoubleTime();
-@@ -355,6 +527,8 @@ int main(int argc, char **argv)
+@@ -355,6 +537,8 @@ int main(int argc, char **argv)
  
  		Host_Frame(time);
  	}
