@@ -41,8 +41,12 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the platform boundary and Q
 - Rendering currently uses ezQuake's classic renderer through Emscripten's legacy OpenGL-to-WebGL
   compatibility layer. This is suitable for proving complete TF2003 MVD playback, not the final
   production renderer.
-- The player keeps a 16:9 viewport and SDL resizes the canvas with the browser window. WebTF uses
+- The embedded player keeps a 16:9 viewport and the browser scales a fixed 1280x720 render target.
+  Fullscreen uses the standard browser Fullscreen API; SDL restores the 1280x720 canvas backing
+  after every browser resize so the WebGL viewport cannot leave black strips. WebTF uses
   `vid_conscale 1` so a fullscreen HUD configuration scales down with the complete canvas.
+- Demo playback forces `cl_sbar 0` and `viewsize 100`, keeping the classic Quake status bar hidden
+  even when a late Fortress/class configuration tries to restore it.
 - Optional sounds absent from the source `C:\Games\ezquake-tf` installation remain absent in the
   browser build.
 - Live QTV transport, touch controls and production asset delivery are the next milestones.

@@ -1057,7 +1057,7 @@ index a4c131074..d77db8fb3 100644
  
  void Sys_MakeCodeWriteable (unsigned long startaddr, unsigned long length) {
 diff --git a/src/vid_sdl2.c b/src/vid_sdl2.c
-index d77ca3919..fb7583037 100644
+index d77ca3919..1ca968a08 100644
 --- a/src/vid_sdl2.c
 +++ b/src/vid_sdl2.c
 @@ -26,6 +26,10 @@
@@ -1071,27 +1071,32 @@ index d77ca3919..fb7583037 100644
  #ifdef X11_GAMMA_WORKAROUND
  #include <X11/extensions/xf86vmode.h>
  #endif
-@@ -597,12 +601,19 @@ static void window_event(SDL_WindowEvent *event)
+@@ -596,6 +600,16 @@ static void window_event(SDL_WindowEvent *event)
+ 			break;
  
  		case SDL_WINDOWEVENT_RESIZED:
- 			if (!(flags & SDL_WINDOW_FULLSCREEN)) {
 +#ifdef __EMSCRIPTEN__
-+				// CSS controls the visible player size.  Keep the render target at a
-+				// predictable 16:9 resolution and let the browser scale the canvas.
-+				glConfig.vidWidth = 1280;
-+				glConfig.vidHeight = 720;
++			// Browser fullscreen can resize the canvas backing store even though
++			// CSS is responsible for scaling the player. Restore the render target
++			// so the 1280x720 viewport cannot leave black strips after transitions.
++			glConfig.vidWidth = 1280;
++			glConfig.vidHeight = 720;
++			emscripten_set_canvas_element_size("#canvas", glConfig.vidWidth, glConfig.vidHeight);
++			if (!r_conwidth.integer || !r_conheight.integer)
++				VID_UpdateConRes();
 +#else
+ 			if (!(flags & SDL_WINDOW_FULLSCREEN)) {
  				glConfig.vidWidth = event->data1;
  				glConfig.vidHeight = event->data2;
- 				if (r_win_save_size.integer) {
- 					Cvar_LatchedSetValue(&vid_win_width, event->data1);
- 					Cvar_LatchedSetValue(&vid_win_height, event->data2);
- 				}
-+#endif
+@@ -606,6 +620,7 @@ static void window_event(SDL_WindowEvent *event)
  				if (!r_conwidth.integer || !r_conheight.integer)
  					VID_UpdateConRes();
  			}
-@@ -699,7 +710,7 @@ byte Key_CharacterToQuakeCode(char ch)
++#endif
+ 			if (renderer.InvalidateViewport)
+ 				renderer.InvalidateViewport();
+ 			break;
+@@ -699,7 +714,7 @@ byte Key_CharacterToQuakeCode(char ch)
  	return Key_ScancodeToQuakeCode(scancode);
  }
  
@@ -1100,7 +1105,7 @@ index d77ca3919..fb7583037 100644
  
  static void keyb_textinputevent(char* text)
  {
-@@ -1107,6 +1118,17 @@ static void VID_SetupResolution(void)
+@@ -1107,6 +1122,17 @@ static void VID_SetupResolution(void)
  	SDL_DisplayMode display_mode;
  	int display_nbr;
  
@@ -1118,7 +1123,7 @@ index d77ca3919..fb7583037 100644
  	if (r_fullscreen.integer) {
  		display_nbr = VID_DisplayNumber(true);
  		if (vid_usedesktopres.integer == 1) {
-@@ -1494,6 +1516,11 @@ static void VID_SDL_Init(void)
+@@ -1494,6 +1520,11 @@ static void VID_SDL_Init(void)
  			Sys_Error("Failed to create SDL window/context: %s\n", SDL_GetError());
  		}
  

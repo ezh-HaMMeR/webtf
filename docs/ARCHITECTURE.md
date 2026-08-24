@@ -36,8 +36,12 @@ and alias-model VBOs that rely on APIs absent from WebGL 1. The compatibility bu
 single-texture multipass world path plus CPU-interpolated immediate alias models, preserving the
 original textures, lightmaps and models without the unstable legacy VBO/client-array path.
 
-The browser platform starts at 1280x720 and resizes the complete canvas with its 16:9 viewport.
-`vid_conscale 1` keeps fullscreen HUD layouts proportional in smaller windows. SDL audio opens at
+The browser platform renders to a fixed 1280x720 canvas which CSS scales with the embedded 16:9
+viewport or the browser fullscreen element. SDL restores that backing size after resize/fullscreen
+events, preventing a stale WebGL viewport from leaving uncovered black strips. `vid_conscale 1`
+keeps fullscreen HUD layouts proportional in smaller windows. During active demo playback the HTML
+shell repeatedly enforces `cl_sbar 0` and `viewsize 100`, so late Fortress/class configs cannot
+restore the classic status bar. SDL audio opens at
 48 kHz with linear resampling and a 2048-sample browser buffer to avoid nearest-neighbour hiss and
 main-thread underruns. Spectator-camera network writes are suppressed during file MVD playback;
 manual selection also disables demo/high-fragger autotracking and locks the selected slot locally.

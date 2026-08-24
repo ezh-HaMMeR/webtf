@@ -12,6 +12,7 @@ const pauseButton = document.querySelector("#pause");
 const fullscreenButton = document.querySelector("#fullscreen");
 const demoInput = document.querySelector("#demo-file");
 const controls = document.querySelector(".controls");
+const viewport = document.querySelector(".viewport");
 
 let engine;
 let started = false;
@@ -50,7 +51,26 @@ function applyViewerOverrides() {
     "hud_teammates_show 0",
     "show_teammates_status 0",
     "scr_teaminfo 0",
+    "cl_sbar 0",
+    "viewsize 100",
   ]) execute(command);
+}
+
+function normalizeCanvasBackingSize() {
+  if (canvas.width !== 1280) canvas.width = 1280;
+  if (canvas.height !== 720) canvas.height = 720;
+}
+
+async function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await viewport.requestFullscreen({ navigationUI: "hide" });
+    }
+  } catch (error) {
+    log(`Fullscreen: ${error?.message || error}`);
+  }
 }
 
 function trackRelative(direction) {
@@ -101,6 +121,11 @@ function updatePlaybackStatus() {
   const namePointer = engine.ccall("WebTF_TrackedName", "number", [], []);
   const name = namePointer ? engine.UTF8ToString(namePointer) : "";
 
+  if (active) {
+    execute("cl_sbar 0");
+    execute("viewsize 100");
+  }
+
   statusNode.dataset.demo = String(active);
   statusNode.dataset.track = String(track);
   trackedPlayerNode.textContent = `КАМЕРА: ${name || "СВОБОДНАЯ"}`;
@@ -120,7 +145,7 @@ function runFrame() {
 
 async function boot() {
   try {
-    const { default: createWebTF } = await import("./build/ezquake.js?v=127");
+    const { default: createWebTF } = await import("./build/ezquake.js?v=128");
     engine = await createWebTF({
       canvas,
       arguments: [
@@ -132,7 +157,7 @@ async function boot() {
       ],
       locateFile(path) {
         const url = new URL(`./build/${path}`, import.meta.url);
-        url.searchParams.set("v", "127");
+        url.searchParams.set("v", "128");
         return url.href;
       },
       print: log,
@@ -183,7 +208,15 @@ pauseButton.addEventListener("click", () => {
   updatePlaybackStatus();
 });
 
-fullscreenButton.addEventListener("click", () => engine?.requestFullscreen(true, true));
+fullscreenButton.addEventListener("click", toggleFullscreen);
+
+document.addEventListener("fullscreenchange", () => {
+  const active = Boolean(document.fullscreenElement);
+  fullscreenButton.textContent = active ? "ВЫЙТИ ИЗ ПОЛНОГО ЭКРАНА" : "ПОЛНЫЙ ЭКРАН";
+  fullscreenButton.setAttribute("aria-pressed", String(active));
+  normalizeCanvasBackingSize();
+  window.setTimeout(normalizeCanvasBackingSize, 0);
+});
 
 // SDL listens for mouse input on the document. Keep player UI clicks from also
 // becoming fire/camera commands inside ezquake-tf.

@@ -80,6 +80,14 @@ h1 { margin: 0; font-size: 18px; letter-spacing: .08em; }
 
 canvas { display: block; width: 100% !important; height: 100% !important; outline: 0; }
 
+.viewport:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+  border: 0;
+  aspect-ratio: auto;
+}
+
 .progress-overlay {
   position: absolute;
   inset: 0;
