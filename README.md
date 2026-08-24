@@ -33,8 +33,14 @@ tracked-player switching and fullscreen. Demo duration, position and seeking are
 compiled client rather than parsed in JavaScript. The original ezquake-tf scoreboard is available
 on `Tab`.
 
-The first load transfers about 215 MiB of locally prepared game data. A production deployment must
-split/cache the data package and serve it with compression and long-lived cache headers.
+The first load transfers about 319 MiB of locally prepared game data. The package includes every
+installed Fortress BSP/LIT so a `/pub` match can open any corresponding MVD without rebuilding the
+client. Production deployment serves the build package with long-lived immutable cache headers.
+
+The standalone page uses its bundled reference demo. A same-origin public demo can be selected with
+`?demo=/webtf/demos/pub/<match-id>.mvd`; `&embed=1` removes the prototype header, local file picker
+and engine console for iframe integration. For safety the player accepts only `.mvd` paths directly
+under `/webtf/demos/pub/` on the current origin.
 
 Browser-only presentation settings live in `web/player-config.json`. `brightness` is a final-canvas
 multiplier (`1` is unchanged, `1.08` is 8% brighter) and does not depend on ezQuake hardware gamma.

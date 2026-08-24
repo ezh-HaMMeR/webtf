@@ -30,6 +30,11 @@ TF models and sounds, and both TF/QW replacement texture directories. Windows-on
 path assumptions are normalized in the generated asset copy; the source client installation is
 never modified.
 
+The browser data package also contains the complete installed `fortress/maps` and `fortress/lits`
+trees. This is intentionally larger than the original single-demo prototype: `/pub` can select any
+recorded public match, so the matching BSP and optional colored-light file must already be available
+inside Emscripten's read-only game filesystem.
+
 The black/flat-world failure found during the prototype was not an MVD parser problem. It combined
 several desktop-OpenGL assumptions: an RGB/RGBA upload mismatch rejected by WebGL, fixed-function
 multitexture coordinates selected from hardware capability instead of the active renderer state,

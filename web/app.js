@@ -24,6 +24,10 @@ const controls = document.querySelector(".controls");
 const utilityControls = document.querySelector(".utility-controls");
 const player = document.querySelector("#player");
 const viewport = document.querySelector(".viewport");
+const browserFetch = window.fetch.bind(window);
+const pageParams = new URLSearchParams(window.location.search);
+const embeddedMode = pageParams.get("embed") === "1";
+const requestedDemoUrl = normalizeRequestedDemoUrl(pageParams.get("demo"));
 
 let engine;
 let started = false;
@@ -34,6 +38,9 @@ let playbackRate = 1;
 let timelineDragging = false;
 let animationFrame;
 let initialTrackTimer;
+let requestedDemoPath = "";
+
+if (embeddedMode) document.body.classList.add("embedded");
 
 const DEFAULT_PLAYER_CONFIG = Object.freeze({
   brightness: 1.08,
@@ -55,7 +62,7 @@ async function loadPlayerConfig() {
   let config = DEFAULT_PLAYER_CONFIG;
 
   try {
-    const response = await fetch("./player-config.json", { cache: "no-store" });
+    const response = await browserFetch("./player-config.json", { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     config = { ...DEFAULT_PLAYER_CONFIG, ...await response.json() };
   } catch (error) {
@@ -65,6 +72,44 @@ async function loadPlayerConfig() {
   const brightness = Math.max(0.5, Math.min(1.5, Number(config.brightness) || 1));
   document.documentElement.style.setProperty("--webtf-brightness", String(brightness));
   return { brightness };
+}
+
+function normalizeRequestedDemoUrl(value) {
+  if (!value) return "";
+
+  try {
+    const url = new URL(value, window.location.href);
+    const allowedPath = /^\/webtf\/demos\/pub\/[a-zA-Z0-9][a-zA-Z0-9_.-]*\.mvd$/;
+    return url.origin === window.location.origin && allowedPath.test(url.pathname)
+      ? url.pathname
+      : "";
+  } catch {
+    return "";
+  }
+}
+
+async function prepareRequestedDemo() {
+  if (!requestedDemoUrl) return "/webtf/demos/demo.mvd";
+  if (requestedDemoPath) return requestedDemoPath;
+
+  const filename = requestedDemoUrl.split("/").pop();
+  const target = `/tmp/${filename}`;
+  const originalLabel = startButton.textContent;
+
+  startButton.disabled = true;
+  startButton.textContent = "ЗАГРУЗКА MVD…";
+  setStatus("ЗАГРУЗКА MVD", "loading");
+
+  try {
+    const response = await browserFetch(requestedDemoUrl, { cache: "default" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    engine.FS.writeFile(target, new Uint8Array(await response.arrayBuffer()));
+    requestedDemoPath = target;
+    return target;
+  } finally {
+    startButton.disabled = false;
+    startButton.textContent = originalLabel;
+  }
 }
 
 function execute(command) {
@@ -250,7 +295,7 @@ function runFrame() {
 async function boot() {
   try {
     await loadPlayerConfig();
-    const { default: createWebTF } = await import("./build/ezquake.js?v=130");
+    const { default: createWebTF } = await import("./build/ezquake.js?v=131");
     engine = await createWebTF({
       canvas,
       arguments: [
@@ -262,7 +307,7 @@ async function boot() {
       ],
       locateFile(path) {
         const url = new URL(`./build/${path}`, import.meta.url);
-        url.searchParams.set("v", "130");
+        url.searchParams.set("v", "131");
         return url.href;
       },
       print: log,
@@ -295,12 +340,18 @@ async function boot() {
   }
 }
 
-startButton.addEventListener("click", () => {
-  started = true;
-  setPlaybackControls(true);
-  play("/webtf/demos/demo.mvd");
-  startButton.textContent = "ПЕРЕЗАПУСТИТЬ ДЕМКУ";
-  window.setTimeout(updatePlaybackStatus, 250);
+startButton.addEventListener("click", async () => {
+  try {
+    const demoPath = await prepareRequestedDemo();
+    started = true;
+    setPlaybackControls(true);
+    play(demoPath);
+    startButton.textContent = "ПЕРЕЗАПУСТИТЬ ДЕМКУ";
+    window.setTimeout(updatePlaybackStatus, 250);
+  } catch (error) {
+    log(`MVD: ${error?.message || error}`);
+    setStatus("ОШИБКА ЗАГРУЗКИ MVD", "error");
+  }
 });
 
 cameraPrevButton.addEventListener("click", () => {

@@ -24,6 +24,35 @@ body {
   color: var(--text);
 }
 
+body.embedded {
+  background: #000;
+}
+
+body.embedded .shell {
+  width: 100%;
+  padding: 0;
+}
+
+body.embedded .topbar,
+body.embedded .console-panel,
+body.embedded .file-button,
+body.embedded .hint {
+  display: none;
+}
+
+body.embedded .utility-controls {
+  justify-content: center;
+  padding: 8px;
+  border-right: 0;
+  border-left: 0;
+  border-bottom: 0;
+}
+
+body.embedded .utility-controls .primary {
+  min-width: 220px;
+  justify-content: center;
+}
+
 button, .file-button { font: inherit; }
 
 .shell {

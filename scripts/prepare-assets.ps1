@@ -44,8 +44,9 @@ Copy-File 'id1\pak0.pak'
 Copy-File 'id1\PAK1.PAK'
 Copy-Tree 'ezquake'
 
-# Retain TF code, models, sounds and replacement textures, but only the map and
-# colored-light file used by the reference demo.
+# Retain TF code, models, sounds, replacement textures and every installed TF
+# map. Pub integration can select any recorded match, so a single reference map
+# is no longer sufficient.
 [IO.Directory]::CreateDirectory((Join-Path $assetRoot 'fortress')) | Out-Null
 Get-ChildItem -LiteralPath (Join-Path $clientRoot 'fortress') -File | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $assetRoot 'fortress') -Force
@@ -74,11 +75,13 @@ if (Test-Path -LiteralPath $countUpper) {
     Move-Item -LiteralPath $countTemporary -Destination $countLower -Force
 }
 
-foreach ($file in @('fortress\maps\bastion.bsp', 'fortress\maps\bastion.ent', 'fortress\lits\bastion.lit')) {
-    Copy-File $file
+foreach ($directory in @('fortress\maps', 'fortress\lits')) {
+    if (Test-Path -LiteralPath (Join-Path $clientRoot $directory)) {
+        Copy-Tree $directory
+    }
 }
 
-# Client-side presentation assets and replacement textures. Unrelated maps remain excluded.
+# Client-side presentation assets and replacement textures.
 foreach ($directory in @('qw\crosshairs', 'qw\env', 'qw\gfx', 'qw\img', 'qw\nquake', 'qw\skins', 'qw\sound', 'qw\textures')) {
     Copy-Tree $directory
 }
