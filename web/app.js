@@ -120,7 +120,7 @@ function runFrame() {
 
 async function boot() {
   try {
-    const { default: createWebTF } = await import("./build/ezquake.js?v=122");
+    const { default: createWebTF } = await import("./build/ezquake.js?v=127");
     engine = await createWebTF({
       canvas,
       arguments: [
@@ -132,7 +132,7 @@ async function boot() {
       ],
       locateFile(path) {
         const url = new URL(`./build/${path}`, import.meta.url);
-        url.searchParams.set("v", "122");
+        url.searchParams.set("v", "127");
         return url.href;
       },
       print: log,

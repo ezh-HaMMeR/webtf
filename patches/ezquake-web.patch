@@ -323,24 +323,76 @@ index 219ec1a3e..b731205b4 100644
  		GL_Procedure(glTextureStorage2D, GL_TextureNameFromReference(texture), levels, internalformat, width, height);
  	}
 diff --git a/src/glc_aliasmodel.c b/src/glc_aliasmodel.c
-index c97421583..e928bcaa0 100644
+index c97421583..4f1509261 100644
 --- a/src/glc_aliasmodel.c
 +++ b/src/glc_aliasmodel.c
-@@ -478,7 +478,7 @@ static void GLC_DrawAliasFrameImpl_Immediate(entity_t* ent, model_t* model, int
+@@ -118,6 +118,13 @@ void GLC_AllocateAliasPoseBuffer(void)
+ 		int max_verts = 0;
+ 		int i;
+ 
++#ifdef __EMSCRIPTEN__
++		// WebGL demos may introduce replacement models after renderer setup.
++		// Allocate the legacy CPU interpolation buffer to the engine's model
++		// limit up front, avoiding a late GL buffer resize in the frame loop.
++		max_verts = 3 * MAXALIASTRIS;
++#endif
++
+ 		for (i = 1; i < MAX_MODELS; ++i) {
+ 			model_t* mod = cl.model_precache[i];
+ 
+@@ -160,11 +167,13 @@ void GLC_AllocateAliasPoseBuffer(void)
+ 			temp_aliasmodel_buffer_size = max_verts;
+ 		}
+ 
+-		if (R_BufferReferenceIsValid(r_buffer_aliasmodel_glc_pose_data)) {
+-			buffers.Resize(r_buffer_aliasmodel_glc_pose_data, sizeof(temp_aliasmodel_buffer[0]) * max_verts, NULL);
+-		}
+-		else {
+-			buffers.Create(r_buffer_aliasmodel_glc_pose_data, buffertype_vertex, "glc-alias-pose", sizeof(temp_aliasmodel_buffer[0]) * max_verts, NULL, bufferusage_reuse_per_frame);
++		if (buffers.supported) {
++			if (R_BufferReferenceIsValid(r_buffer_aliasmodel_glc_pose_data)) {
++				buffers.Resize(r_buffer_aliasmodel_glc_pose_data, sizeof(temp_aliasmodel_buffer[0]) * max_verts, NULL);
++			}
++			else {
++				buffers.Create(r_buffer_aliasmodel_glc_pose_data, buffertype_vertex, "glc-alias-pose", sizeof(temp_aliasmodel_buffer[0]) * max_verts, NULL, bufferusage_reuse_per_frame);
++			}
+ 		}
+ 	}
+ 
+@@ -478,7 +487,13 @@ static void GLC_DrawAliasFrameImpl_Immediate(entity_t* ent, model_t* model, int
  	extern cvar_t r_lerpmuzzlehack;
  
  	aliashdr_t* paliashdr = (aliashdr_t*)Mod_Extradata(model);
 -	qbool cache = buffers.supported && temp_aliasmodel_buffer_size >= paliashdr->poseverts;
++#ifdef __EMSCRIPTEN__
++	// WebGL cannot draw from the legacy client-memory VAO used by this path.
++	// Use the renderer's true-immediate fallback after CPU interpolation.
++	qbool cache = false;
++#else
 +	qbool cache = buffers.supported && temp_aliasmodel_buffer_size >= paliashdr->vertsPerPose;
++#endif
  	qbool mtex = R_TextureReferenceIsValid(fb_texture) && gl_mtexable;
  	vbo_model_vert_t* vbo_buffer = (vbo_model_vert_t*)model->temp_vbo_buffer;
  	vbo_model_vert_t* verts1, * verts2;
-@@ -486,6 +486,10 @@ static void GLC_DrawAliasFrameImpl_Immediate(entity_t* ent, model_t* model, int
+@@ -486,6 +501,23 @@ static void GLC_DrawAliasFrameImpl_Immediate(entity_t* ent, model_t* model, int
  	qbool alpha_blend = (render_effects & RF_ALPHABLEND) || ent->r_modelalpha < 1;
  	qbool is_weapon_model = (ent->renderfx & RF_WEAPONMODEL);
  
-+	if (!vbo_buffer || !temp_aliasmodel_buffer || temp_aliasmodel_buffer_size < paliashdr->vertsPerPose) {
++	if (!vbo_buffer) {
 +		return;
++	}
++
++	// MVD playback can precache replacement/custom models after the initial
++	// renderer allocation. Grow and rebind the classic pose buffer on demand
++	// instead of silently dropping every alias model that does not fit.
++	if (!temp_aliasmodel_buffer || temp_aliasmodel_buffer_size < paliashdr->vertsPerPose) {
++		GLC_AllocateAliasPoseBuffer();
++		if (!temp_aliasmodel_buffer || temp_aliasmodel_buffer_size < paliashdr->vertsPerPose) {
++			return;
++		}
++#ifndef __EMSCRIPTEN__
++		cache = buffers.supported;
++#endif
 +	}
 +
  	verts1 = &vbo_buffer[pose1 * paliashdr->poseverts];
@@ -744,6 +796,23 @@ index 1a69c468b..3bb7c2227 100644
  extern cvar_t gl_program_aliasmodels;
  #define R_GLSLAliasModelRendering() ((!R_UseImmediateOpenGL()) || gl_program_aliasmodels.integer)
  #else
+diff --git a/src/r_atlas.c b/src/r_atlas.c
+index f611c957a..6fe829e39 100644
+--- a/src/r_atlas.c
++++ b/src/r_atlas.c
+@@ -456,6 +456,12 @@ void CachePics_CreateAtlas(void)
+ 	double start_time = Sys_DoubleTime();
+ 
+ 	if (COM_CheckParm(cmdline_param_client_noatlas)) {
++		// Solid-color HUD primitives (health/armor bars, speedometer frame,
++		// rectangles and lines) still need a valid white texture when the
++		// cache-pic atlas is intentionally disabled.
++		solid_texnum = solidwhite_texture;
++		solid_s = 0.5f;
++		solid_t = 0.5f;
+ 		atlas_refresh = false;
+ 		return;
+ 	}
 diff --git a/src/snd_main.c b/src/snd_main.c
 index a9025b002..bb271b758 100644
 --- a/src/snd_main.c
@@ -1061,4 +1130,3 @@ index d77ca3919..fb7583037 100644
  		// Alert user if our mode doesn't match what they requested
  		if (!(vid_options[i] & VID_MULTISAMPLED) && gl_multisamples.integer > 0) {
  			Cvar_AutoSetInt(&gl_multisamples, 0);
-
