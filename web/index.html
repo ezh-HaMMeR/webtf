@@ -21,13 +21,6 @@
 
       <section class="viewport" aria-label="ezQuake-TF WebGL player">
         <canvas id="canvas" width="1280" height="720" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
-        <aside id="scoreboard-panel" class="scoreboard-panel" aria-label="Скорборд" hidden>
-          <div class="scoreboard-title">TF2003 / SCOREBOARD</div>
-          <table>
-            <thead><tr><th>TEAM</th><th>PLAYER</th><th>FRAGS</th><th>PING</th></tr></thead>
-            <tbody id="scoreboard-body"></tbody>
-          </table>
-        </aside>
         <div id="progress-overlay" class="progress-overlay">
           <div class="progress-copy">
             <span id="progress-label">Подготовка WebAssembly…</span>
@@ -43,7 +36,6 @@
           <button id="camera-next" type="button" disabled>ИГРОК ▶</button>
         </div>
         <button id="pause" type="button" disabled>ПАУЗА</button>
-        <button id="scoreboard" type="button" disabled>СКОРБОРД</button>
         <button id="fullscreen" type="button" disabled>ПОЛНЫЙ ЭКРАН</button>
         <label class="file-button">
           ОТКРЫТЬ MVD
@@ -58,6 +50,6 @@
       </details>
     </main>
 
-    <script src="app.js?v=15" type="module"></script>
+    <script src="app.js?v=20" type="module"></script>
   </body>
 </html>

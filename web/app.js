@@ -9,18 +9,15 @@ const startButton = document.querySelector("#start");
 const cameraPrevButton = document.querySelector("#camera-prev");
 const cameraNextButton = document.querySelector("#camera-next");
 const pauseButton = document.querySelector("#pause");
-const scoreboardButton = document.querySelector("#scoreboard");
 const fullscreenButton = document.querySelector("#fullscreen");
 const demoInput = document.querySelector("#demo-file");
 const controls = document.querySelector(".controls");
-const scoreboardPanel = document.querySelector("#scoreboard-panel");
-const scoreboardBody = document.querySelector("#scoreboard-body");
 
 let engine;
 let started = false;
 let paused = false;
-let scoreboardVisible = false;
 let animationFrame;
+let initialTrackTimer;
 
 function log(message) {
   const line = String(message);
@@ -38,57 +35,35 @@ function execute(command) {
   if (engine) engine.ccall("WebTF_ExecuteCommand", null, ["string"], [command]);
 }
 
-function engineText(exportName, slot) {
-  const pointer = engine.ccall(exportName, "number", ["number"], [slot]);
-  return pointer ? engine.UTF8ToString(pointer) : "";
-}
-
-function updateScoreboard() {
-  if (!engine || !scoreboardVisible) return;
-
-  const players = [];
-  const maxClients = engine.ccall("WebTF_MaxClients", "number", [], []);
-  for (let slot = 0; slot < maxClients; slot += 1) {
-    if (!engine.ccall("WebTF_PlayerActive", "number", ["number"], [slot])) continue;
-    const spectator = Boolean(engine.ccall("WebTF_PlayerSpectator", "number", ["number"], [slot]));
-    players.push({
-      spectator,
-      team: spectator ? "SPEC" : (engineText("WebTF_PlayerTeam", slot) || "—"),
-      name: engineText("WebTF_PlayerName", slot),
-      frags: engine.ccall("WebTF_PlayerFrags", "number", ["number"], [slot]),
-      ping: engine.ccall("WebTF_PlayerPing", "number", ["number"], [slot]),
-    });
-  }
-
-  players.sort((a, b) => Number(a.spectator) - Number(b.spectator)
-    || a.team.localeCompare(b.team)
-    || b.frags - a.frags
-    || a.name.localeCompare(b.name));
-  scoreboardBody.replaceChildren(...players.map((player) => {
-    const row = document.createElement("tr");
-    if (player.spectator) row.className = "spectator";
-    for (const value of [player.team, player.name, player.frags, player.ping]) {
-      const cell = document.createElement("td");
-      cell.textContent = String(value);
-      row.append(cell);
-    }
-    return row;
-  }));
-}
-
 function setPlaybackControls(enabled) {
-  for (const control of [cameraPrevButton, cameraNextButton, pauseButton, scoreboardButton]) {
+  for (const control of [cameraPrevButton, cameraNextButton, pauseButton]) {
     control.disabled = !enabled;
   }
+}
+
+function applyViewerOverrides() {
+  for (const command of [
+    "mvd_autotrack 0",
+    "demo_autotrack 0",
+    "cl_hightrack 0",
+    "scr_autoid 1",
+    "hud_teammates_show 0",
+    "show_teammates_status 0",
+    "scr_teaminfo 0",
+  ]) execute(command);
+}
+
+function trackRelative(direction) {
+  if (!engine) return;
+  applyViewerOverrides();
+  engine.ccall("WebTF_TrackRelative", null, ["number"], [direction]);
+  canvas.focus({ preventScroll: true });
 }
 
 function resetToggles() {
   paused = false;
   pauseButton.textContent = "ПАУЗА";
   pauseButton.setAttribute("aria-pressed", "false");
-  scoreboardVisible = false;
-  scoreboardButton.setAttribute("aria-pressed", "false");
-  scoreboardPanel.hidden = true;
   execute("cl_demospeed 1");
 }
 
@@ -96,12 +71,20 @@ function play(path) {
   if (!engine) return;
   resetToggles();
   execute(`playdemo "${path}"`);
-  window.setTimeout(() => {
+  window.clearInterval(initialTrackTimer);
+  let attempts = 0;
+  initialTrackTimer = window.setInterval(() => {
+    attempts += 1;
     engine.ccall("WebTF_CloseMenus", null, [], []);
-    execute("mvd_autotrack 4");
-    execute("mvd_autotrack_instant 1");
-    engine.ccall("WebTF_TrackRelative", null, ["number"], [1]);
-  }, 800);
+    applyViewerOverrides();
+    if (engine.ccall("WebTF_DemoPlayback", "number", [], [])
+      && engine.ccall("WebTF_TrackNum", "number", [], []) < 0) {
+      engine.ccall("WebTF_TrackRelative", null, ["number"], [1]);
+    }
+    if (engine.ccall("WebTF_TrackNum", "number", [], []) >= 0 || attempts >= 40) {
+      window.clearInterval(initialTrackTimer);
+    }
+  }, 500);
   canvas.focus({ preventScroll: true });
 }
 
@@ -137,18 +120,19 @@ function runFrame() {
 
 async function boot() {
   try {
-    const { default: createWebTF } = await import("./build/ezquake.js?v=118");
+    const { default: createWebTF } = await import("./build/ezquake.js?v=122");
     engine = await createWebTF({
       canvas,
       arguments: [
         "-basedir", "/webtf", "-nohome", "-noatlas", "-nomtex", "-window", "-width", "1280", "-height", "720",
         "-game", "fortress", "+vid_fullscreen", "0",
         "+vid_win_width", "1280", "+vid_win_height", "720",
+        "+vid_conscale", "1",
         "+gl_program_aliasmodels", "0", "+gl_vbo_clientmemory", "1",
       ],
       locateFile(path) {
         const url = new URL(`./build/${path}`, import.meta.url);
-        url.searchParams.set("v", "118");
+        url.searchParams.set("v", "122");
         return url.href;
       },
       print: log,
@@ -168,7 +152,6 @@ async function boot() {
     setStatus("ДВИЖОК ГОТОВ", "ready");
     animationFrame = window.requestAnimationFrame(runFrame);
     window.setInterval(updatePlaybackStatus, 400);
-    window.setInterval(updateScoreboard, 800);
   } catch (error) {
     log(error?.stack || error);
     progressLabel.textContent = "Ошибка запуска. Подробности в консоли движка.";
@@ -185,13 +168,11 @@ startButton.addEventListener("click", () => {
 });
 
 cameraPrevButton.addEventListener("click", () => {
-  engine?.ccall("WebTF_TrackRelative", null, ["number"], [-1]);
-  canvas.focus({ preventScroll: true });
+  trackRelative(-1);
 });
 
 cameraNextButton.addEventListener("click", () => {
-  engine?.ccall("WebTF_TrackRelative", null, ["number"], [1]);
-  canvas.focus({ preventScroll: true });
+  trackRelative(1);
 });
 
 pauseButton.addEventListener("click", () => {
@@ -200,14 +181,6 @@ pauseButton.addEventListener("click", () => {
   pauseButton.textContent = paused ? "ПРОДОЛЖИТЬ" : "ПАУЗА";
   pauseButton.setAttribute("aria-pressed", String(paused));
   updatePlaybackStatus();
-});
-
-scoreboardButton.addEventListener("click", () => {
-  scoreboardVisible = !scoreboardVisible;
-  scoreboardPanel.hidden = !scoreboardVisible;
-  updateScoreboard();
-  scoreboardButton.setAttribute("aria-pressed", String(scoreboardVisible));
-  canvas.focus({ preventScroll: true });
 });
 
 fullscreenButton.addEventListener("click", () => engine?.requestFullscreen(true, true));

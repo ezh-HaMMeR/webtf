@@ -152,6 +152,33 @@ index aae98e366..bf5845e9b 100644
  		{ 
  			// close enough?
  			MSG_WriteByte (&cls.netchan.message, clc_tmove);
+diff --git a/src/cl_input.c b/src/cl_input.c
+index afd67d67d..ed9aa180a 100644
+--- a/src/cl_input.c
++++ b/src/cl_input.c
+@@ -234,8 +234,6 @@ void IN_StrafeUp(void) { KeyUp(&in_strafe); }
+ // Returns true if given command is a protected movement command and was executed successfully
+ qbool Key_TryMovementProtected(const char* cmd, qbool down, int key)
+ {
+-	typedef void (*KeyPress_fnc) (kbutton_t* b, int key);
+-	KeyPress_fnc f = down ? KeyDown_common : (KeyPress_fnc)KeyUp_common;
+ 	kbutton_t* b = NULL;
+ 
+ 	if (strcmp(cmd, "+forward") == 0) b = &in_forward;
+@@ -250,7 +248,12 @@ qbool Key_TryMovementProtected(const char* cmd, qbool down, int key)
+ 	else if (strcmp(cmd, "+movedown") == 0) b = &in_down;
+ 
+ 	if (b) {
+-		f(b, key);
++		if (down) {
++			KeyDown_common(b, key);
++		}
++		else {
++			KeyUp_common(b, key);
++		}
+ 		return true;
+ 	}
+ 	else {
 diff --git a/src/common.c b/src/common.c
 index 77cc8fb56..494171a30 100644
 --- a/src/common.c
@@ -295,6 +322,30 @@ index 219ec1a3e..b731205b4 100644
  	if (GL_Available(glTextureStorage2D)) {
  		GL_Procedure(glTextureStorage2D, GL_TextureNameFromReference(texture), levels, internalformat, width, height);
  	}
+diff --git a/src/glc_aliasmodel.c b/src/glc_aliasmodel.c
+index c97421583..e928bcaa0 100644
+--- a/src/glc_aliasmodel.c
++++ b/src/glc_aliasmodel.c
+@@ -478,7 +478,7 @@ static void GLC_DrawAliasFrameImpl_Immediate(entity_t* ent, model_t* model, int
+ 	extern cvar_t r_lerpmuzzlehack;
+ 
+ 	aliashdr_t* paliashdr = (aliashdr_t*)Mod_Extradata(model);
+-	qbool cache = buffers.supported && temp_aliasmodel_buffer_size >= paliashdr->poseverts;
++	qbool cache = buffers.supported && temp_aliasmodel_buffer_size >= paliashdr->vertsPerPose;
+ 	qbool mtex = R_TextureReferenceIsValid(fb_texture) && gl_mtexable;
+ 	vbo_model_vert_t* vbo_buffer = (vbo_model_vert_t*)model->temp_vbo_buffer;
+ 	vbo_model_vert_t* verts1, * verts2;
+@@ -486,6 +486,10 @@ static void GLC_DrawAliasFrameImpl_Immediate(entity_t* ent, model_t* model, int
+ 	qbool alpha_blend = (render_effects & RF_ALPHABLEND) || ent->r_modelalpha < 1;
+ 	qbool is_weapon_model = (ent->renderfx & RF_WEAPONMODEL);
+ 
++	if (!vbo_buffer || !temp_aliasmodel_buffer || temp_aliasmodel_buffer_size < paliashdr->vertsPerPose) {
++		return;
++	}
++
+ 	verts1 = &vbo_buffer[pose1 * paliashdr->poseverts];
+ 	verts2 = &vbo_buffer[pose2 * paliashdr->poseverts];
+ 
 diff --git a/src/glc_brushmodel.c b/src/glc_brushmodel.c
 index f5fde55c3..fe36c2fa5 100644
 --- a/src/glc_brushmodel.c
@@ -318,10 +369,31 @@ index f5fde55c3..fe36c2fa5 100644
  
  								if (allocations.fbTextureUnit >= 0) {
 diff --git a/src/glc_draw.c b/src/glc_draw.c
-index cd6a97443..5d38429b8 100644
+index cd6a97443..9ef21c68a 100644
 --- a/src/glc_draw.c
 +++ b/src/glc_draw.c
-@@ -482,6 +482,39 @@ static void GLC_HudDrawImages_Immediate(texture_ref ref, int start, int end)
+@@ -242,9 +242,17 @@ void GLC_DrawRectangle(float x, float y, float width, float height, byte* color)
+ 
+ void GLC_DrawImage(float x, float y, float width, float height, float tex_s, float tex_t, float tex_width, float tex_height, byte* color, int flags)
+ {
+-	int imageIndex = imageData.imageCount * 4;
+-	glm_image_t* img = &imageData.images[imageData.imageCount * 4];
+-	float alpha = (color[3] * overall_alpha / 255.0f);
++	int imageIndex;
++	glm_image_t* img;
++	float alpha;
++
++	if (imageData.imageCount >= MAX_MULTI_IMAGE_BATCH) {
++		return;
++	}
++
++	imageIndex = imageData.imageCount * 4;
++	img = &imageData.images[imageIndex];
++	alpha = (color[3] * overall_alpha / 255.0f);
+ 
+ 	img[0].colour[0] = img[1].colour[0] = img[2].colour[0] = img[3].colour[0] = color[0] * alpha;
+ 	img[0].colour[1] = img[1].colour[1] = img[2].colour[1] = img[3].colour[1] = color[1] * alpha;
+@@ -482,6 +490,39 @@ static void GLC_HudDrawImages_Immediate(texture_ref ref, int start, int end)
  
  	renderer.TextureSetFiltering(ref, nearest ? texture_minification_nearest : texture_minification_linear, nearest ? texture_magnification_nearest : texture_magnification_linear);
  	renderer.TextureUnitBind(0, ref);
@@ -592,6 +664,32 @@ index f3d9d67cf..f6db72a45 100644
 +	mix_floor = mod(floor(style / 64.0), 2.0);
 +	mix_wall = mod(floor(style / 128.0), 2.0);
  }
+diff --git a/src/hud_armor.c b/src/hud_armor.c
+index 53a1f84f7..43a63a539 100644
+--- a/src/hud_armor.c
++++ b/src/hud_armor.c
+@@ -177,7 +177,7 @@ void SCR_HUD_DrawBarArmor(hud_t *hud)
+ 	static	cvar_t *width = NULL, *height, *direction, *color_noarmor, *color_ga, *color_ga_over, *color_ya, *color_ra, *color_unnatural;
+ 	int		x, y;
+ 	int		armor = HUD_Stats(STAT_ARMOR);
+-	qbool	alive = cl.stats[STAT_HEALTH] > 0;
++	qbool	alive = HUD_Stats(STAT_HEALTH) > 0;
+ 
+ 	if (width == NULL) {
+ 		// first time called
+diff --git a/src/hud_health.c b/src/hud_health.c
+index 79198e4e2..a456de2d3 100644
+--- a/src/hud_health.c
++++ b/src/hud_health.c
+@@ -73,7 +73,7 @@ static void SCR_HUD_DrawBarHealth(hud_t *hud)
+ {
+ 	static	cvar_t *width = NULL, *height, *direction, *color_nohealth, *color_normal, *color_mega, *color_twomega, *color_unnatural;
+ 	int		x, y;
+-	int		health = cl.stats[STAT_HEALTH];
++	int		health = HUD_Stats(STAT_HEALTH);
+ 
+ 	if (width == NULL) {
+ 		// first time called
 diff --git a/src/hud_teaminfo.c b/src/hud_teaminfo.c
 index 87192bd7f..ffb3221ca 100644
 --- a/src/hud_teaminfo.c
@@ -630,13 +728,35 @@ index d3409738e..9b89f704b 100644
  
  size_t strlcpy(char *dst, const char *src, size_t siz)
  {
+diff --git a/src/r_aliasmodel_mesh.c b/src/r_aliasmodel_mesh.c
+index 1a69c468b..3bb7c2227 100644
+--- a/src/r_aliasmodel_mesh.c
++++ b/src/r_aliasmodel_mesh.c
+@@ -166,7 +166,10 @@ void GL_PrepareAliasModel(model_t* m, aliashdr_t* hdr)
+ 	}
+ }
+ 
+-#ifdef RENDERER_OPTION_CLASSIC_OPENGL
++#ifdef __EMSCRIPTEN__
++/* WebTF can switch to legacy immediate rendering after configs are loaded. */
++#define R_GLSLAliasModelRendering() (0)
++#elif defined(RENDERER_OPTION_CLASSIC_OPENGL)
+ extern cvar_t gl_program_aliasmodels;
+ #define R_GLSLAliasModelRendering() ((!R_UseImmediateOpenGL()) || gl_program_aliasmodels.integer)
+ #else
 diff --git a/src/snd_main.c b/src/snd_main.c
-index a9025b002..3b30ae831 100644
+index a9025b002..bb271b758 100644
 --- a/src/snd_main.c
 +++ b/src/snd_main.c
-@@ -94,7 +94,11 @@ cvar_t s_show = {"s_show", "0"};
+@@ -92,9 +92,17 @@ cvar_t s_ambientlevel = {"s_ambientlevel", "0.3"};
+ cvar_t s_ambientfade = {"s_ambientfade", "100"};
+ cvar_t s_show = {"s_show", "0"};
  cvar_t s_swapstereo = {"s_swapstereo", "0"};
++#ifdef __EMSCRIPTEN__
++cvar_t s_linearresample = {"s_linearresample", "1", CVAR_LATCH_SOUND };
++#else
  cvar_t s_linearresample = {"s_linearresample", "0", CVAR_LATCH_SOUND };
++#endif
  cvar_t s_linearresample_stream = {"s_linearresample_stream", "0"};
 +#ifdef __EMSCRIPTEN__
 +cvar_t s_khz = {"s_khz", "48", CVAR_NONE, OnChange_s_khz};
@@ -646,14 +766,14 @@ index a9025b002..3b30ae831 100644
  cvar_t s_desiredsamples = {"s_desiredsamples", "0", CVAR_AUTO, OnChange_s_desiredsamples };
  cvar_t s_audiodevice = {"s_audiodevice", "0", CVAR_LATCH_SOUND };
  cvar_t s_silent_racing = { "s_silent_racing", "0" };
-@@ -254,6 +258,12 @@ static qbool S_SDL_Init(void)
+@@ -254,6 +262,12 @@ static qbool S_SDL_Init(void)
  
  		desired.samples = desired_samples;
  	}
 +#ifdef __EMSCRIPTEN__
-+	/* WebAudio ScriptProcessorNode rejects buffers smaller than 256 samples. */
-+	if (desired.samples < 256) {
-+		desired.samples = 256;
++	/* The callback runs on the browser main thread; leave enough headroom for WebGL frames. */
++	if (desired.samples < 2048) {
++		desired.samples = 2048;
 +	}
 +#endif
  	desired.callback = S_SDL_callback;
@@ -674,7 +794,7 @@ index 775094376..8b111c2ac 100644
  	desired.channels = 1;
  
 diff --git a/src/sys_posix.c b/src/sys_posix.c
-index a4c131074..500f6c573 100644
+index a4c131074..d77db8fb3 100644
 --- a/src/sys_posix.c
 +++ b/src/sys_posix.c
 @@ -45,7 +45,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
@@ -709,7 +829,7 @@ index a4c131074..500f6c573 100644
  #ifdef DEBUG
  	va_list argptr;
  	char text[2048];
-@@ -315,9 +332,124 @@ double Sys_DoubleTime(void)
+@@ -315,9 +332,129 @@ double Sys_DoubleTime(void)
  }
  #endif
  
@@ -808,12 +928,17 @@ index a4c131074..500f6c573 100644
 +	int step = direction < 0 ? -1 : 1;
 +	int i;
 +
++	Cmd_ExecuteString("mvd_autotrack 0");
++	Cmd_ExecuteString("demo_autotrack 0");
++	Cmd_ExecuteString("cl_hightrack 0");
++
 +	for (i = 1; i <= MAX_CLIENTS; ++i) {
 +		int slot = (current + step * i + MAX_CLIENTS * 2) % MAX_CLIENTS;
 +		if (cl.players[slot].name[0] && !cl.players[slot].spectator) {
-+			char command[64];
-+			snprintf(command, sizeof(command), "track %d", cl.players[slot].userid);
-+			Cmd_ExecuteString(command);
++			cl.autocam = CAM_TRACK;
++			Cam_Lock(slot);
++			cl.ideal_track = slot;
++			cl.spec_locked = true;
 +			return;
 +		}
 +	}
@@ -835,7 +960,7 @@ index a4c131074..500f6c573 100644
  	int i;
  
  #ifdef __linux__
-@@ -344,9 +476,16 @@ int main(int argc, char **argv)
+@@ -344,9 +481,16 @@ int main(int argc, char **argv)
  	if (COM_CheckParm(cmdline_param_client_nostdoutput))
  		sys_nostdout.value = 1;
  
@@ -853,7 +978,7 @@ index a4c131074..500f6c573 100644
  	while (1) {
  		// find time spent rendering last frame
  		newtime = Sys_DoubleTime();
-@@ -355,6 +494,8 @@ int main(int argc, char **argv)
+@@ -355,6 +499,8 @@ int main(int argc, char **argv)
  
  		Host_Frame(time);
  	}

@@ -28,8 +28,8 @@ Open `http://localhost:3000/`. Build output and prepared proprietary/game assets
 not committed.
 
 The page starts the bundled TF2003 MVD, accepts a local demo through the file picker, switches the
-tracked player, pauses playback, shows a scoreboard sourced from ezquake-tf state and enters
-fullscreen. All of these actions call the compiled client; the browser page does not parse MVD data.
+tracked player, pauses playback and enters fullscreen. The original ezquake-tf scoreboard is
+available on `Tab`; the browser page does not duplicate it or parse MVD data.
 
 The first load transfers about 215 MiB of locally prepared game data. A production deployment must
 split/cache the data package and serve it with compression and long-lived cache headers.
@@ -41,8 +41,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the platform boundary and Q
 - Rendering currently uses ezQuake's classic renderer through Emscripten's legacy OpenGL-to-WebGL
   compatibility layer. This is suitable for proving complete TF2003 MVD playback, not the final
   production renderer.
-- The browser render target is fixed at 1280x720 and scaled responsively by CSS. Dynamic
-  device-pixel-ratio sizing belongs in the WebGL 2 production renderer.
+- The player keeps a 16:9 viewport and SDL resizes the canvas with the browser window. WebTF uses
+  `vid_conscale 1` so a fullscreen HUD configuration scales down with the complete canvas.
 - Optional sounds absent from the source `C:\Games\ezquake-tf` installation remain absent in the
   browser build.
 - Live QTV transport, touch controls and production asset delivery are the next milestones.

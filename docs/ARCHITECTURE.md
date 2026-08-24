@@ -21,9 +21,8 @@ playback is stable, using a small WebSocket-to-QTV bridge next to the existing q
 2. The browser UI sends `playdemo` to the original ezquake-tf command buffer.
 3. ezquake-tf reads MVD1, loads the recorded `fortress` game directory and map assets, and renders
    through its existing SDL/OpenGL renderer translated to WebGL.
-4. Camera switching and HUD stay engine commands/configuration. The HTML scoreboard reads the
-   authoritative player/team/frag/ping state through a narrow exported client bridge; it does not
-   parse or duplicate the MVD protocol.
+4. Camera switching, HUD and the `Tab` scoreboard stay inside the engine. The HTML shell only
+   exposes transport, manual camera, pause, fullscreen and local-file controls.
 
 The prepared filesystem includes the reference client's `qw/autoexec.cfg`, Fortress settings/HUD,
 TF models and sounds, and both TF/QW replacement texture directories. Windows-only case and parent
@@ -37,10 +36,16 @@ and alias-model VBOs that rely on APIs absent from WebGL 1. The compatibility bu
 single-texture multipass world path plus client-memory alias models, preserving the original
 textures, lightmaps and models without the unstable legacy VBO emulation path.
 
-The browser platform also fixes the render target at 1280x720 (CSS scales the complete canvas),
-opens SDL audio at 48 kHz, and suppresses spectator-camera network writes during file MVD playback.
-The latter prevents the unused reliable netchan buffer from filling while still updating the local
-camera exactly as before.
+The browser platform starts at 1280x720 and resizes the complete canvas with its 16:9 viewport.
+`vid_conscale 1` keeps fullscreen HUD layouts proportional in smaller windows. SDL audio opens at
+48 kHz with linear resampling and a 2048-sample browser buffer to avoid nearest-neighbour hiss and
+main-thread underruns. Spectator-camera network writes are suppressed during file MVD playback;
+manual selection also disables demo/high-fragger autotracking and locks the selected slot locally.
+
+The compatibility path retains CPU alias-model vertices because Fortress configs can change the
+renderer after model loading. WebAssembly also requires exact indirect-call signatures, so protected
+movement key-up/down dispatch uses direct typed calls; this keeps console text input from aborting
+the client. Tracked-player health and armor bars read `HUD_Stats`, matching the other MVD HUD values.
 
 ## Production renderer direction
 
