@@ -99,7 +99,7 @@ foreach ($directory in @('fortress\maps', 'fortress\lits')) {
 }
 
 # Startup UI resources stay in the core package.
-foreach ($directory in @('qw\crosshairs', 'qw\img', 'qw\textures\charsets')) {
+foreach ($directory in @('qw\crosshairs', 'qw\img', 'qw\textures\charsets', 'qw\textures\wad')) {
     Copy-Tree $directory
 }
 # Runtime visuals are one immutable common pack. Large menu backgrounds and

@@ -34,12 +34,15 @@ compiled client rather than parsed in JavaScript. The original ezquake-tf scoreb
 on `Tab`.
 
 The asset payload is split instead of embedding the complete client in every launch. The current
-build contains about 68 MiB of core data, a 65 MiB compressed common runtime pack and a small pack
+build contains about 71 MiB of core data, a 65 MiB compressed common runtime pack and a small pack
 for each map (for example, `flib10b` is about 0.3 MiB). The selected MVD is also a separate HTTP
 file. Core and runtime/map packs use versioned URLs and long-lived immutable browser caching, so
 opening another match normally transfers only its MVD and a map pack that is not cached yet.
 Opening the player page itself does not download the engine or game resources; initialization starts
 only after the user presses the demo launch button or selects a local MVD.
+
+HUD WAD replacement pictures are deliberately kept in the core package: ezQuake caches status-bar
+digits during renderer initialization, before the deferred common pack is installed.
 
 The standalone page downloads its external reference demo. A same-origin public demo can be selected
 with `?demo=/webtf/demos/pub/<match-id>.mvd&map=<map-name>`; `&embed=1` removes the prototype header,
