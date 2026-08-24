@@ -68,6 +68,19 @@ function setStatus(text, state) {
   statusNode.dataset.state = state;
 }
 
+function formatEngineLoadStatus(message) {
+  const text = String(message || "");
+  if (/^Downloading data/i.test(text)) {
+    // With Nginx gzip_static, Chromium reports decoded bytes as `loaded` but
+    // the compressed Content-Length as `total`. Showing those incompatible
+    // counters produces impossible values such as 60 MiB / 40 MiB.
+    return "Загрузка сжатого ядра WebTF…";
+  }
+  if (/^Preparing/i.test(text)) return "Подготовка файлов движка…";
+  if (/^Running/i.test(text)) return "Запуск движка…";
+  return text || "Загрузка…";
+}
+
 async function loadPlayerConfig() {
   let config = DEFAULT_PLAYER_CONFIG;
 
@@ -456,10 +469,15 @@ async function boot() {
       print: log,
       printErr: log,
       setStatus(message) {
-        progressLabel.textContent = message || "Загрузка…";
+        progressLabel.textContent = formatEngineLoadStatus(message);
+        progress.removeAttribute("value");
       },
       monitorRunDependencies(left) {
-        progress.value = left ? Math.max(5, 100 - left * 8) : 100;
+        if (left) {
+          progress.removeAttribute("value");
+        } else {
+          progress.value = 100;
+        }
       },
     });
 
