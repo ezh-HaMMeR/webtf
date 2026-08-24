@@ -45,6 +45,7 @@ let timelineDragging = false;
 let animationFrame;
 let initialTrackTimer;
 let requestedDemoPath = "";
+let bootPromise;
 const installedPacks = new Set();
 
 if (embeddedMode) document.body.classList.add("embedded");
@@ -367,6 +368,13 @@ function runFrame() {
 }
 
 async function boot() {
+  overlay.hidden = false;
+  progress.value = 0;
+  progressLabel.textContent = "Подготовка WebAssembly…";
+  startButton.disabled = true;
+  demoInput.disabled = true;
+  setStatus("ЗАГРУЗКА ДВИЖКА", "loading");
+
   try {
     await loadPlayerConfig();
     const { default: createWebTF } = await import("./build/ezquake.js?v=132");
@@ -414,11 +422,26 @@ async function boot() {
     log(error?.stack || error);
     progressLabel.textContent = "Ошибка запуска. Подробности в консоли движка.";
     setStatus("ОШИБКА", "error");
+    startButton.disabled = false;
+    demoInput.disabled = false;
+    throw error;
   }
+}
+
+async function ensureEngine() {
+  if (engine) return engine;
+  if (!bootPromise) {
+    bootPromise = boot().catch((error) => {
+      bootPromise = undefined;
+      throw error;
+    });
+  }
+  return bootPromise;
 }
 
 startButton.addEventListener("click", async () => {
   try {
+    await ensureEngine();
     const demoPath = await prepareRequestedDemo();
     started = true;
     setPlaybackControls(true);
@@ -536,18 +559,22 @@ for (const container of [controls, utilityControls]) {
 
 demoInput.addEventListener("change", async () => {
   const file = demoInput.files?.[0];
-  if (!file || !engine) return;
-  const target = `/tmp/${file.name.replace(/[^a-zA-Z0-9_.-]/g, "_")}`;
-  engine.FS.writeFile(target, new Uint8Array(await file.arrayBuffer()));
-  started = true;
-  setPlaybackControls(true);
-  play(target);
-  startButton.textContent = "ЗАПУСТИТЬ ВСТРОЕННУЮ ДЕМКУ";
+  if (!file) return;
+  try {
+    await ensureEngine();
+    const target = `/tmp/${file.name.replace(/[^a-zA-Z0-9_.-]/g, "_")}`;
+    engine.FS.writeFile(target, new Uint8Array(await file.arrayBuffer()));
+    started = true;
+    setPlaybackControls(true);
+    play(target);
+    startButton.textContent = "ЗАПУСТИТЬ ВСТРОЕННУЮ ДЕМКУ";
+  } catch (error) {
+    log(`MVD: ${error?.message || error}`);
+    setStatus("ОШИБКА ЗАГРУЗКИ MVD", "error");
+  }
 });
 
 canvas.addEventListener("webglcontextlost", (event) => {
   event.preventDefault();
   setStatus("WEBGL-КОНТЕКСТ ПОТЕРЯН", "error");
 });
-
-boot();

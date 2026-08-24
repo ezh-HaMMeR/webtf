@@ -38,6 +38,8 @@ build contains about 68 MiB of core data, a 65 MiB compressed common runtime pac
 for each map (for example, `flib10b` is about 0.3 MiB). The selected MVD is also a separate HTTP
 file. Core and runtime/map packs use versioned URLs and long-lived immutable browser caching, so
 opening another match normally transfers only its MVD and a map pack that is not cached yet.
+Opening the player page itself does not download the engine or game resources; initialization starts
+only after the user presses the demo launch button or selects a local MVD.
 
 The standalone page downloads its external reference demo. A same-origin public demo can be selected
 with `?demo=/webtf/demos/pub/<match-id>.mvd&map=<map-name>`; `&embed=1` removes the prototype header,
