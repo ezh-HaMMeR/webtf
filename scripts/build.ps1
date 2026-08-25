@@ -1,6 +1,8 @@
 param(
     [switch]$SkipDependencies,
-    [switch]$SkipAssets
+    [switch]$SkipAssets,
+    [string]$ClientPath = $env:WEBTF_CLIENT_PATH,
+    [string]$DemoPath = $env:WEBTF_DEMO_PATH
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,10 +21,10 @@ if (-not (Test-Path -LiteralPath (Join-Path $emscriptenRoot 'emcc.exe'))) {
     throw 'Emscripten is missing. Run scripts\install-toolchain.ps1 first.'
 }
 if (-not (Test-Path -LiteralPath (Join-Path $engineRoot 'CMakeLists.txt'))) {
-    throw 'Patched engine checkout is missing. Run scripts\setup-engine.ps1 first.'
+    throw 'Patched ezQuake checkout is missing. Run scripts\setup-engine.ps1 first.'
 }
 if (-not $SkipAssets) {
-    & (Join-Path $PSScriptRoot 'prepare-assets.ps1')
+    & (Join-Path $PSScriptRoot 'prepare-assets.ps1') -ClientPath $ClientPath -DemoPath $DemoPath
     & (Join-Path $PSScriptRoot 'build-packs.ps1')
 }
 if (-not (Test-Path -LiteralPath (Join-Path $assetRoot 'id1\pak0.pak'))) {
@@ -62,7 +64,7 @@ cmake -S $engineRoot -B $buildRoot -G Ninja `
     '-DRENDERING_TRACE=OFF' `
     '-DCMAKE_BUILD_TYPE=Release' `
     "-DWEBTF_ASSET_DIR=$assetRoot"
-if ($LASTEXITCODE -ne 0) { throw 'Unable to configure ezquake-tf for WebAssembly.' }
+if ($LASTEXITCODE -ne 0) { throw 'Unable to configure ezQuake for WebAssembly.' }
 
 # Asset files are embedded at link time but are not ordinary Ninja inputs.
 # Removing only final products forces a relink without recompiling all objects.
@@ -73,7 +75,7 @@ if (-not $SkipAssets) {
 }
 
 cmake --build $buildRoot --target ezquake --parallel
-if ($LASTEXITCODE -ne 0) { throw 'ezquake-tf WebAssembly build failed.' }
+if ($LASTEXITCODE -ne 0) { throw 'ezQuake WebAssembly build failed.' }
 
 [IO.Directory]::CreateDirectory($outputRoot) | Out-Null
 foreach ($name in @('ezquake.js', 'ezquake.wasm', 'ezquake.data')) {

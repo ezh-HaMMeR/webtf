@@ -5,7 +5,7 @@ const trackedPlayerNode = document.querySelector("#tracked-player");
 const overlay = document.querySelector("#progress-overlay");
 const progress = document.querySelector("#progress");
 const progressLabel = document.querySelector("#progress-label");
-const startButton = document.querySelector("#start");
+const restartButton = document.querySelector("#restart");
 const cameraPrevButton = document.querySelector("#camera-prev");
 const cameraNextButton = document.querySelector("#camera-next");
 const pauseButton = document.querySelector("#pause");
@@ -27,6 +27,7 @@ const viewport = document.querySelector(".viewport");
 const browserFetch = window.fetch.bind(window);
 const pageParams = new URLSearchParams(window.location.search);
 const embeddedMode = pageParams.get("embed") === "1";
+const autoStartRequested = pageParams.get("autoplay") === "1" || !embeddedMode;
 const webtfHttpBase = window.location.pathname.startsWith("/webtf") ? "/webtf" : "";
 const requestedDemoParameter = pageParams.get("demo");
 const requestedDemoUrl = requestedDemoParameter
@@ -45,6 +46,7 @@ let timelineDragging = false;
 let animationFrame;
 let initialTrackTimer;
 let requestedDemoPath = "";
+let activeDemoPath = "";
 let bootPromise;
 let runtimeAssetsPromise;
 let requestedDemoDownloadPromise;
@@ -102,9 +104,12 @@ async function loadHudConfig() {
   try {
     const response = await browserFetch(url, { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const target = "/webtf/fortress/hud-web.cfg";
+    // Replace the real Fortress HUD file in MEMFS. Class configs execute
+    // settings.cfg -> hud.cfg during MVD playback, so using a separate
+    // hud-web.cfg would let the embedded fallback overwrite these settings.
+    const target = "/webtf/fortress/hud.cfg";
     engine.FS.writeFile(target, new TextEncoder().encode(await response.text()));
-    execute("exec hud-web.cfg");
+    execute("exec hud.cfg");
     log(`HUD config: ${url}`);
   } catch (error) {
     log(`HUD config: ${error?.message || error}; using embedded fallback`);
@@ -236,9 +241,7 @@ async function prepareRequestedDemo(download = beginRequestedDemoDownload()) {
   if (!requestedDemoUrl) throw new Error("Недопустимый адрес MVD");
   if (requestedDemoPath) return requestedDemoPath;
 
-  const originalLabel = startButton.textContent;
-  startButton.disabled = true;
-  startButton.textContent = "ЗАГРУЗКА MVD…";
+  restartButton.disabled = true;
   setStatus("ЗАГРУЗКА MVD", "loading");
 
   try {
@@ -251,8 +254,7 @@ async function prepareRequestedDemo(download = beginRequestedDemoDownload()) {
     requestedDemoPath = result.demo.target;
     return requestedDemoPath;
   } finally {
-    startButton.disabled = false;
-    startButton.textContent = originalLabel;
+    restartButton.disabled = !started || !activeDemoPath;
   }
 }
 
@@ -278,9 +280,6 @@ function applyViewerOverrides() {
     "demo_autotrack 0",
     "cl_hightrack 0",
     "scr_autoid 1",
-    "hud_teammates_show 0",
-    "show_teammates_status 0",
-    "scr_teaminfo 0",
     "cl_sbar 0",
     "viewsize 100",
   ]) execute(command);
@@ -338,6 +337,27 @@ function play(path) {
     }
   }, 500);
   canvas.focus({ preventScroll: true });
+}
+
+function startDemo(path) {
+  activeDemoPath = path;
+  started = true;
+  setPlaybackControls(true);
+  restartButton.disabled = false;
+  play(path);
+  window.setTimeout(updatePlaybackStatus, 250);
+}
+
+async function startRequestedDemo() {
+  try {
+    const demoDownload = beginRequestedDemoDownload();
+    await ensureEngine();
+    const demoPath = await prepareRequestedDemo(demoDownload);
+    startDemo(demoPath);
+  } catch (error) {
+    log(`MVD: ${error?.message || error}`);
+    setStatus("ОШИБКА ЗАГРУЗКИ MVD", "error");
+  }
 }
 
 function formatTime(seconds) {
@@ -440,7 +460,7 @@ async function boot() {
   overlay.hidden = false;
   progress.value = 0;
   progressLabel.textContent = "Подготовка WebAssembly…";
-  startButton.disabled = true;
+  restartButton.disabled = true;
   demoInput.disabled = true;
   setStatus("ЗАГРУЗКА ДВИЖКА", "loading");
 
@@ -484,7 +504,6 @@ async function boot() {
     await prepareRuntimeAssets(runtimeDownloads);
     await loadHudConfig();
 
-    startButton.disabled = false;
     fullscreenButton.disabled = false;
     demoInput.disabled = false;
     muteButton.disabled = false;
@@ -502,7 +521,7 @@ async function boot() {
     log(error?.stack || error);
     progressLabel.textContent = "Ошибка запуска. Подробности в консоли движка.";
     setStatus("ОШИБКА", "error");
-    startButton.disabled = false;
+    restartButton.disabled = !started || !activeDemoPath;
     demoInput.disabled = false;
     throw error;
   }
@@ -519,20 +538,10 @@ async function ensureEngine() {
   return bootPromise;
 }
 
-startButton.addEventListener("click", async () => {
-  try {
-    const demoDownload = beginRequestedDemoDownload();
-    await ensureEngine();
-    const demoPath = await prepareRequestedDemo(demoDownload);
-    started = true;
-    setPlaybackControls(true);
-    play(demoPath);
-    startButton.textContent = "ПЕРЕЗАПУСТИТЬ ДЕМКУ";
-    window.setTimeout(updatePlaybackStatus, 250);
-  } catch (error) {
-    log(`MVD: ${error?.message || error}`);
-    setStatus("ОШИБКА ЗАГРУЗКИ MVD", "error");
-  }
+restartButton.addEventListener("click", () => {
+  if (!activeDemoPath) return;
+  play(activeDemoPath);
+  window.setTimeout(updatePlaybackStatus, 250);
 });
 
 cameraPrevButton.addEventListener("click", () => {
@@ -645,10 +654,7 @@ demoInput.addEventListener("change", async () => {
     await ensureEngine();
     const target = `/tmp/${file.name.replace(/[^a-zA-Z0-9_.-]/g, "_")}`;
     engine.FS.writeFile(target, new Uint8Array(await file.arrayBuffer()));
-    started = true;
-    setPlaybackControls(true);
-    play(target);
-    startButton.textContent = "ЗАПУСТИТЬ ВСТРОЕННУЮ ДЕМКУ";
+    startDemo(target);
   } catch (error) {
     log(`MVD: ${error?.message || error}`);
     setStatus("ОШИБКА ЗАГРУЗКИ MVD", "error");
@@ -659,3 +665,5 @@ canvas.addEventListener("webglcontextlost", (event) => {
   event.preventDefault();
   setStatus("WEBGL-КОНТЕКСТ ПОТЕРЯН", "error");
 });
+
+if (autoStartRequested) void startRequestedDemo();

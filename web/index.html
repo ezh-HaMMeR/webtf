@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>WebTF — ezQuake-TF WebAssembly prototype</title>
+    <title>WebTF — QuakeWorld MVD player</title>
     <link rel="stylesheet" href="app.css?v=7">
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">QWTF.NET / ТЕХНИЧЕСКИЙ ПРОТОТИП</p>
+          <p class="eyebrow">QWTF.NET / ПРОСМОТР ДЕМО</p>
           <h1>WebTF</h1>
         </div>
         <div class="playback-meta">
@@ -31,6 +31,9 @@
 
         <section class="controls" aria-label="Управление воспроизведением">
           <div class="control-cluster audio-controls">
+            <button id="restart" class="icon-control restart-control" type="button" aria-label="Перезапустить демку" title="Перезапустить демку" disabled>
+              <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"></path><path d="M19.2 12a7.5 7.5 0 1 0 .3 5"></path></svg>
+            </button>
             <button id="mute" class="icon-control" type="button" aria-label="Выключить звук" title="Выключить звук" disabled>
               <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4Z"></path><path class="sound-waves" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"></path><path class="mute-slash" d="M4 4l16 16"></path></svg>
             </button>
@@ -70,7 +73,6 @@
       </section>
 
       <section class="utility-controls">
-        <button id="start" class="primary" type="button">ЗАПУСТИТЬ ДЕМКУ</button>
         <label class="file-button">
           ОТКРЫТЬ MVD
           <input id="demo-file" type="file" accept=".mvd,.qwd,.dem">
@@ -84,6 +86,6 @@
       </details>
     </main>
 
-    <script src="app.js?v=36" type="module"></script>
+    <script src="app.js?v=37" type="module"></script>
   </body>
 </html>

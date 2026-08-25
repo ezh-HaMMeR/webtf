@@ -1,0 +1,56 @@
+# Include this file inside the HTTPS server block for the site.
+# Replace /var/www/webtf if WebTF is installed elsewhere.
+
+location = /webtf {
+    return 301 /webtf/;
+}
+
+location ^~ /webtf/demos/ {
+    alias /var/www/webtf/demos/;
+    autoindex off;
+    gzip_static on;
+    default_type application/octet-stream;
+    add_header Cache-Control "public, max-age=3600" always;
+    add_header X-Content-Type-Options "nosniff" always;
+}
+
+location ^~ /webtf/build/ {
+    alias /var/www/webtf/web/build/;
+    autoindex off;
+    gzip_static on;
+    types {
+        application/javascript js;
+        application/wasm wasm;
+        application/octet-stream data;
+    }
+    add_header Cache-Control "public, max-age=2592000, immutable" always;
+    add_header X-Content-Type-Options "nosniff" always;
+}
+
+location ^~ /webtf/packs/ {
+    alias /var/www/webtf/web/packs/;
+    autoindex off;
+    default_type application/octet-stream;
+    add_header Cache-Control "public, max-age=2592000, immutable" always;
+    add_header X-Content-Type-Options "nosniff" always;
+}
+
+location = /webtf/player-config.json {
+    alias /var/www/webtf/web/player-config.json;
+    default_type application/json;
+    add_header Cache-Control "no-cache, no-store, max-age=0" always;
+}
+
+location = /webtf/config/hud.cfg {
+    alias /var/www/webtf/web/config/hud.cfg;
+    default_type text/plain;
+    add_header Cache-Control "no-store, max-age=0" always;
+}
+
+location ^~ /webtf/ {
+    alias /var/www/webtf/web/;
+    index index.html;
+    autoindex off;
+    add_header Cache-Control "no-cache" always;
+    add_header X-Content-Type-Options "nosniff" always;
+}

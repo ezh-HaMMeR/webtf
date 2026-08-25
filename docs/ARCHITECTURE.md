@@ -1,19 +1,18 @@
 # WebTF architecture
 
 WebTF is not an independent Quake renderer and does not reinterpret MVD packets in JavaScript.
-It compiles the ezquake-tf client itself to WebAssembly so that the existing MVD1 parser,
+It compiles a compatible ezQuake / ezquake-tf client to WebAssembly so that the existing MVD1 parser,
 prediction, camera selection, scoreboard, HUD, TeamFortress assets and sound mixer remain the
 single source of truth.
 
-## Prototype boundary
+## Current scope
 
-The first milestone supports local `.mvd`, `.qwd` and `.dem` playback from a browser file picker
-or from the bundled `demos/demo.mvd`. It uses SDL2 for input/audio and an OpenGL ES 2/WebGL 1
-compatibility context for rendering.
+WebTF supports `.mvd`, `.qwd` and `.dem` playback from a browser file picker or from same-origin
+HTTP storage. It uses SDL2 for input/audio and an OpenGL ES 2/WebGL 1 compatibility context for
+rendering.
 
 Native UDP/TCP sockets, the server browser, automatic updates, Discord integration, movie capture,
-voice input and QTV discovery are outside the first milestone. Live viewing will be added after demo
-playback is stable, using a small WebSocket-to-QTV bridge next to the existing qtv/mvdsv services.
+voice input and ordinary interactive network play are outside the current browser player.
 
 ## Data flow
 
@@ -37,7 +36,7 @@ match map name to WebTF, which loads only the corresponding package before start
 models, sounds, skins and replacement textures live in one versioned common package. Stable core,
 common and map URLs are cached independently, while every MVD remains an ordinary separate file.
 
-The black/flat-world failure found during the prototype was not an MVD parser problem. It combined
+The black/flat-world failure found during the initial WebGL work was not an MVD parser problem. It combined
 several desktop-OpenGL assumptions: an RGB/RGBA upload mismatch rejected by WebGL, fixed-function
 multitexture coordinates selected from hardware capability instead of the active renderer state,
 and alias-model VBOs that rely on APIs absent from WebGL 1. The compatibility build uses a
@@ -69,15 +68,9 @@ WebAssembly also requires exact indirect-call signatures, so protected
 movement key-up/down dispatch uses direct typed calls; this keeps console text input from aborting
 the client. Tracked-player health and armor bars read `HUD_Stats`, matching the other MVD HUD values.
 
-## Production renderer direction
+## Renderer implementation
 
-The compatibility renderer keeps the prototype close to the native client and provides a working
-reference. The production path should replace legacy immediate-mode emulation incrementally with
-the existing shader renderer adapted to WebGL 2, while preserving the same client, protocol and
-filesystem layers. Demo behavior can then be compared frame-for-frame with this first milestone.
-
-## Live QTV phase
-
-Browsers cannot open the raw QTV TCP stream. A same-origin service will expose a WebSocket endpoint,
-perform the QTV handshake upstream and forward binary stream data without modifying protocol bytes.
-The web platform layer will then present the WebSocket as the client's stream transport.
+The compatibility renderer keeps WebTF close to the native client and provides the current working
+implementation. A future WebGL 2 renderer can replace legacy immediate-mode emulation incrementally
+while preserving the same client, protocol and filesystem layers. Demo behavior can be compared
+frame-for-frame with the compatibility renderer during that work.

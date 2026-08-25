@@ -1,10 +1,16 @@
 param(
-    [string]$ClientPath = 'C:\Games\ezquake-tf',
-    [string]$DemoPath = (Join-Path $PSScriptRoot '..\demos\demo.mvd')
+    [string]$ClientPath = $env:WEBTF_CLIENT_PATH,
+    [string]$DemoPath = $env:WEBTF_DEMO_PATH
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+if ([string]::IsNullOrWhiteSpace($ClientPath)) {
+    throw 'Pass -ClientPath or set WEBTF_CLIENT_PATH to an ezQuake client installation.'
+}
+if ([string]::IsNullOrWhiteSpace($DemoPath)) {
+    $DemoPath = Join-Path $projectRoot 'demos\demo.mvd'
+}
 $assetRoot = Join-Path $projectRoot 'assets'
 $packAssetRoot = Join-Path $projectRoot 'pack-assets'
 $commonAssetRoot = Join-Path $packAssetRoot 'common'
